@@ -9,40 +9,37 @@ const handler: Handler = async () => {
   const currentHour = now.getHours()
   const currentMinute = now.getMinutes()
 
-  // 1. Load all schedules
+  // 1. Load recurring schedules
   const { data: schedules, error } = await supabase
     .from("recurring_scrapes")
     .select("*")
 
-  if (error) {
-    console.error("❌ Error fetching schedules:", error)
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Supabase query failed" }),
-    }
+  if (error || !schedules) {
+    return { statusCode: 500, body: "Failed to fetch schedules" }
   }
 
-  // 2. Load saved API settings
-  const { data: settingsData, error: settingsError } = await supabase
-    .from("settings") // your settings table name
-    .select("*")
+  const due = schedules.filter(
+    (s) => s.recurring_days?.includes(currentDay) && s.hour === currentHour && s.minute === currentMinute
+  )
+
+  if (due.length === 0) {
+    return { statusCode: 200, body: "No schedules matched this time" }
+  }
+
+  // 2. Fetch settings from "settings" table
+  const { data: settingsRow, error: settingsError } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "scrapperSettings")
     .single()
 
-  if (settingsError || !settingsData) {
-    console.error("❌ Failed to load saved settings", settingsError)
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Failed to load API credentials" }),
-    }
+  if (settingsError || !settingsRow) {
+    return { statusCode: 500, body: "Failed to fetch scraper settings" }
   }
 
-  // 3. Filter due schedules
-  const due = schedules.filter(
-    (s) =>
-      s.recurring_days?.includes(currentDay) &&
-      s.hour === currentHour &&
-      s.minute === currentMinute
-  )
+  const settingsData = typeof settingsRow.value === "string"
+    ? JSON.parse(settingsRow.value)
+    : settingsRow.value
 
   for (const schedule of due) {
     try {
@@ -59,8 +56,8 @@ const handler: Handler = async () => {
         withPhone: true,
         withoutPhone: false,
         enrichWithAreaCodes: false,
-        addedFrom: schedule.from_date || new Date().toISOString().split("T")[0],
-        addedTo: schedule.to_date || new Date().toISOString().split("T")[0],
+        addedFrom: settingsData.fromDate,
+        addedTo: settingsData.toDate,
       })
 
       await sendTelegramMessage(
@@ -75,10 +72,7 @@ const handler: Handler = async () => {
     }
   }
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: "Checked schedules" }),
-  }
+  return { statusCode: 200, body: "Scheduled scrapes executed" }
 }
 
 export { handler }
