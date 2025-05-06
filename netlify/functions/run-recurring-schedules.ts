@@ -3,12 +3,13 @@ import { supabase } from "../../lib/supabase"
 import { fetchBusinessData } from "../../actions/targetron"
 import { sendTelegramMessage } from "../../actions/telegram"
 
-const handler: Handler = async (event, context) => {
+const handler: Handler = async () => {
   const now = new Date()
-  const currentDay = now.toLocaleString("en-US", { weekday: "long" }) // e.g. Monday
+  const currentDay = now.toLocaleString("en-US", { weekday: "long" })
   const currentHour = now.getHours()
   const currentMinute = now.getMinutes()
 
+  // 1. Load all schedules
   const { data: schedules, error } = await supabase
     .from("recurring_scrapes")
     .select("*")
@@ -21,6 +22,21 @@ const handler: Handler = async (event, context) => {
     }
   }
 
+  // 2. Load saved API settings
+  const { data: settingsData, error: settingsError } = await supabase
+    .from("settings") // your settings table name
+    .select("*")
+    .single()
+
+  if (settingsError || !settingsData) {
+    console.error("❌ Failed to load saved settings", settingsError)
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Failed to load API credentials" }),
+    }
+  }
+
+  // 3. Filter due schedules
   const due = schedules.filter(
     (s) =>
       s.recurring_days?.includes(currentDay) &&
@@ -31,7 +47,7 @@ const handler: Handler = async (event, context) => {
   for (const schedule of due) {
     try {
       const results = await fetchBusinessData({
-        apiKey: schedule.targetronApiKey,
+        apiKey: settingsData.targetronApiKey,
         country: schedule.country,
         city: schedule.city,
         state: schedule.state,
@@ -50,8 +66,8 @@ const handler: Handler = async (event, context) => {
       await sendTelegramMessage(
         `✅ Scrape for ${schedule.city}, ${schedule.business_type} ran at ${currentHour}:${currentMinute}. ${results.length} records found.`,
         {
-          botToken: schedule.telegramBotToken,
-          chatId: schedule.telegramChatId,
+          botToken: settingsData.telegramBotToken,
+          chatId: settingsData.telegramChatId,
         }
       )
     } catch (err) {
