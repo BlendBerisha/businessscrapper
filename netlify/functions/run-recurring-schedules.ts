@@ -4,6 +4,7 @@ import { fetchBusinessData } from "../../actions/targetron"
 import { parse } from "json2csv"
 import axios from "axios"
 
+// ✅ Slack webhook
 const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 const handler: Handler = async () => {
@@ -12,33 +13,40 @@ const handler: Handler = async () => {
   const currentHour = now.getHours()
   const currentMinute = now.getMinutes()
 
-  // Get saved recurring schedules
+  // ✅ Load recurring scrape schedules
   const { data: schedules, error: scheduleError } = await supabase
     .from("recurring_scrapes")
     .select("*")
 
-  if (scheduleError) {
+  if (scheduleError || !schedules) {
+    console.error("❌ Error fetching schedules:", scheduleError)
     return {
       statusCode: 500,
-      body: "❌ Error fetching schedules: " + JSON.stringify(scheduleError),
+      body: "❌ Failed to fetch recurring scrape schedules",
     }
   }
 
-  // Load global API settings
-  const { data: settingsRow, error: settingsError } = await supabase
+  // ✅ Load shared settings (like API keys)
+  const { data: settingsData, error: settingsError } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "scrapperSettings")
-    .single()
+    .limit(1)
 
-  if (settingsError || !settingsRow || !settingsRow.value) {
+  if (
+    settingsError ||
+    !settingsData ||
+    settingsData.length === 0 ||
+    !settingsData[0].value
+  ) {
+    console.error("❌ Error loading settings from Supabase", settingsError)
     return {
       statusCode: 500,
       body: "❌ Error loading settings from Supabase",
     }
   }
 
-  const settings = settingsRow.value
+  const settings = settingsData[0].value
 
   const dueSchedules = schedules.filter(
     (s) =>
@@ -48,15 +56,16 @@ const handler: Handler = async () => {
   )
 
   if (dueSchedules.length === 0) {
+    console.log("⏱ No schedules due at this time.")
     return {
       statusCode: 200,
-      body: "✅ No schedules due at this time.",
+      body: "No schedules due at this time.",
     }
   }
 
   for (const schedule of dueSchedules) {
     try {
-      const results = await fetchBusinessData({
+      const businessData = await fetchBusinessData({
         apiKey: settings.targetronApiKey,
         country: schedule.country,
         city: schedule.city,
@@ -69,29 +78,32 @@ const handler: Handler = async () => {
         withPhone: true,
         withoutPhone: false,
         enrichWithAreaCodes: false,
-        addedFrom: schedule.from_date || new Date().toISOString().split("T")[0],
-        addedTo: schedule.to_date || new Date().toISOString().split("T")[0],
+        addedFrom: settings.fromDate || new Date().toISOString().split("T")[0],
+        addedTo: settings.toDate || new Date().toISOString().split("T")[0],
       })
 
-      const csv = parse(results)
+      const csv = parse(businessData)
 
-      // Send to Slack
+      // ✅ Send message to Slack
       await axios.post(SLACK_WEBHOOK_URL, {
-        text: `✅ Scrape for *${schedule.city}* (${schedule.business_type}) ran at ${currentHour}:${currentMinute}. ${results.length} records found.`,
+        text: `✅ Scheduled scrape ran for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\nRecords found: ${businessData.length}`,
       })
 
-      // NOTE: Slack webhooks do not support file uploads via webhook. You can only send plain text or links.
-      // If you want to send files, you'd need to use the Slack API with OAuth instead.
+      // ✅ Send CSV as code snippet (optional)
+      await axios.post(SLACK_WEBHOOK_URL, {
+        text: "```\n" + csv.slice(0, 2800) + "\n```", // Slack limit is ~3000 chars
+      })
     } catch (err) {
+      console.error(`❌ Scrape failed for schedule ID ${schedule.id}`, err)
       await axios.post(SLACK_WEBHOOK_URL, {
-        text: `❌ Scrape failed for ${schedule.city}, ${schedule.business_type}: ${err.message}`,
+        text: `❌ Scrape failed for schedule ID ${schedule.id}. Check server logs.`,
       })
     }
   }
 
   return {
     statusCode: 200,
-    body: "✅ Recurring tasks processed",
+    body: "✅ All due schedules processed",
   }
 }
 
