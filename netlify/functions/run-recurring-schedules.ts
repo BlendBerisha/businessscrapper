@@ -1,11 +1,9 @@
 import { Handler } from "@netlify/functions"
 import { supabase } from "../../lib/supabase"
 import { fetchBusinessData } from "../../actions/targetron"
-import { verifyEmails } from "../../actions/million-verifier"
 import { parse } from "json2csv"
 import axios from "axios"
 
-// Your Slack Webhook
 const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 const handler: Handler = async () => {
@@ -14,27 +12,34 @@ const handler: Handler = async () => {
   const currentHour = now.getHours()
   const currentMinute = now.getMinutes()
 
-  // Load recurring scrapes
-  const { data: schedules, error } = await supabase.from("recurring_scrapes").select("*")
-  if (error || !schedules) {
-    console.error("❌ Error fetching schedules:", error)
-    return { statusCode: 500, body: "Error fetching schedules" }
+  // Get saved recurring schedules
+  const { data: schedules, error: scheduleError } = await supabase
+    .from("recurring_scrapes")
+    .select("*")
+
+  if (scheduleError) {
+    return {
+      statusCode: 500,
+      body: "❌ Error fetching schedules: " + JSON.stringify(scheduleError),
+    }
   }
 
-  // Load global settings
+  // Load global API settings
   const { data: settingsRow, error: settingsError } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "scrapperSettings")
     .single()
 
-  const settingsData = settingsRow?.value
-  if (settingsError || !settingsData) {
-    console.error("❌ Error loading settings")
-    return { statusCode: 500, body: "Error loading settings" }
+  if (settingsError || !settingsRow || !settingsRow.value) {
+    return {
+      statusCode: 500,
+      body: "❌ Error loading settings from Supabase",
+    }
   }
 
-  // Filter due schedules
+  const settings = settingsRow.value
+
   const dueSchedules = schedules.filter(
     (s) =>
       s.recurring_days?.includes(currentDay) &&
@@ -42,11 +47,17 @@ const handler: Handler = async () => {
       s.minute === currentMinute
   )
 
+  if (dueSchedules.length === 0) {
+    return {
+      statusCode: 200,
+      body: "✅ No schedules due at this time.",
+    }
+  }
+
   for (const schedule of dueSchedules) {
     try {
-      // Fetch business data
-      const data = await fetchBusinessData({
-        apiKey: settingsData.targetronApiKey,
+      const results = await fetchBusinessData({
+        apiKey: settings.targetronApiKey,
         country: schedule.country,
         city: schedule.city,
         state: schedule.state,
@@ -62,54 +73,25 @@ const handler: Handler = async () => {
         addedTo: schedule.to_date || new Date().toISOString().split("T")[0],
       })
 
-      // Optional email verification
-      const verifiedData = settingsData.connectEmailVerification && settingsData.millionApiKey
-        ? await verifyEmails(data, settingsData.millionApiKey)
-        : data
-
-      // Convert to CSV
-      const csv = parse(verifiedData)
-      const csvBase64 = Buffer.from(csv, "utf-8").toString("base64")
+      const csv = parse(results)
 
       // Send to Slack
       await axios.post(SLACK_WEBHOOK_URL, {
-        text: `✅ Scrape completed for *${schedule.city}, ${schedule.business_type}* at ${currentHour}:${currentMinute}. Found ${verifiedData.length} records.`,
-        attachments: [
-          {
-            text: "CSV Preview:",
-            fallback: "CSV Attached",
-            color: "#36a64f",
-            fields: [
-              {
-                title: "City",
-                value: schedule.city,
-                short: true,
-              },
-              {
-                title: "Type",
-                value: schedule.business_type,
-                short: true,
-              },
-              {
-                title: "Records",
-                value: verifiedData.length.toString(),
-                short: true,
-              },
-            ],
-          },
-        ],
+        text: `✅ Scrape for *${schedule.city}* (${schedule.business_type}) ran at ${currentHour}:${currentMinute}. ${results.length} records found.`,
       })
 
-      console.log(`✅ Scrape complete for ${schedule.city} (${verifiedData.length} records)`)
-
+      // NOTE: Slack webhooks do not support file uploads via webhook. You can only send plain text or links.
+      // If you want to send files, you'd need to use the Slack API with OAuth instead.
     } catch (err) {
-      console.error(`❌ Error running schedule ${schedule.id}`, err)
+      await axios.post(SLACK_WEBHOOK_URL, {
+        text: `❌ Scrape failed for ${schedule.city}, ${schedule.business_type}: ${err.message}`,
+      })
     }
   }
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ message: "Recurring scrape check complete." }),
+    body: "✅ Recurring tasks processed",
   }
 }
 
