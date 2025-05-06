@@ -3,15 +3,20 @@ import { supabase } from "../../lib/supabase"
 import { fetchBusinessData } from "../../actions/targetron"
 import { parse } from "json2csv"
 import axios from "axios"
+import { DateTime } from "luxon"
 
 // ✅ Slack webhook
-const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+const SLACK_WEBHOOK_URL =
+  "https://hooks.slack.com/services/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"
 
 const handler: Handler = async () => {
-  const now = new Date()
-  const currentDay = now.toLocaleString("en-US", { weekday: "long" })
-  const currentHour = now.getHours()
-  const currentMinute = now.getMinutes()
+  // ⏰ Use local time zone (Europe/Tirane)
+  const now = DateTime.now().setZone("Europe/Tirane")
+  const currentDay = now.toFormat("cccc") // e.g. "Tuesday"
+  const currentHour = now.hour
+  const currentMinute = now.minute
+
+  console.log(`🕓 Current time in Europe/Tirane: ${currentDay} ${currentHour}:${currentMinute}`)
 
   // ✅ Load recurring scrape schedules
   const { data: schedules, error: scheduleError } = await supabase
@@ -30,7 +35,7 @@ const handler: Handler = async () => {
   const { data: settingsData, error: settingsError } = await supabase
     .from("settings")
     .select("value")
-    .eq("key", "scraperSettings")
+    .eq("key", "scrapperSettings")
     .limit(1)
 
   if (
@@ -84,12 +89,12 @@ const handler: Handler = async () => {
 
       const csv = parse(businessData)
 
-      // ✅ Send message to Slack
+      // ✅ Notify Slack
       await axios.post(SLACK_WEBHOOK_URL, {
         text: `✅ Scheduled scrape ran for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\nRecords found: ${businessData.length}`,
       })
 
-      // ✅ Send CSV as code snippet (optional)
+      // ✅ Send CSV preview (optional)
       await axios.post(SLACK_WEBHOOK_URL, {
         text: "```\n" + csv.slice(0, 2800) + "\n```", // Slack limit is ~3000 chars
       })
