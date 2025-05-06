@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { supabase } from "@/lib/supabase"
 
 export async function GET() {
@@ -15,12 +17,16 @@ export async function GET() {
 
     let value = data?.value || {}
 
-    // unwrap nested
     while (value?.value) {
       value = value.value
     }
 
-    return new Response(JSON.stringify(value), { status: 200 })
+    return new Response(JSON.stringify(value), {
+      status: 200,
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    })
   } catch (err: any) {
     console.error("❌ GET /api/get-settings failed:", err.message)
     return new Response(JSON.stringify({ error: err.message }), { status: 500 })
