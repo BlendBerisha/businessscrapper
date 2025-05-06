@@ -1,7 +1,12 @@
 import { Handler } from "@netlify/functions"
 import { supabase } from "../../lib/supabase"
 import { fetchBusinessData } from "../../actions/targetron"
-import { sendTelegramMessage } from "../../actions/telegram"
+import { verifyEmails } from "../../actions/million-verifier"
+import { parse } from "json2csv"
+import axios from "axios"
+
+// Your Slack Webhook
+const SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 const handler: Handler = async () => {
   const now = new Date()
@@ -9,41 +14,38 @@ const handler: Handler = async () => {
   const currentHour = now.getHours()
   const currentMinute = now.getMinutes()
 
-  // 1. Load recurring schedules
-  const { data: schedules, error } = await supabase
-    .from("recurring_scrapes")
-    .select("*")
-
+  // Load recurring scrapes
+  const { data: schedules, error } = await supabase.from("recurring_scrapes").select("*")
   if (error || !schedules) {
-    return { statusCode: 500, body: "Failed to fetch schedules" }
+    console.error("❌ Error fetching schedules:", error)
+    return { statusCode: 500, body: "Error fetching schedules" }
   }
 
-  const due = schedules.filter(
-    (s) => s.recurring_days?.includes(currentDay) && s.hour === currentHour && s.minute === currentMinute
-  )
-
-  if (due.length === 0) {
-    return { statusCode: 200, body: "No schedules matched this time" }
-  }
-
-  // 2. Fetch settings from "settings" table
+  // Load global settings
   const { data: settingsRow, error: settingsError } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "scrapperSettings")
     .single()
 
-  if (settingsError || !settingsRow) {
-    return { statusCode: 500, body: "Failed to fetch scraper settings" }
+  const settingsData = settingsRow?.value
+  if (settingsError || !settingsData) {
+    console.error("❌ Error loading settings")
+    return { statusCode: 500, body: "Error loading settings" }
   }
 
-  const settingsData = typeof settingsRow.value === "string"
-    ? JSON.parse(settingsRow.value)
-    : settingsRow.value
+  // Filter due schedules
+  const dueSchedules = schedules.filter(
+    (s) =>
+      s.recurring_days?.includes(currentDay) &&
+      s.hour === currentHour &&
+      s.minute === currentMinute
+  )
 
-  for (const schedule of due) {
+  for (const schedule of dueSchedules) {
     try {
-      const results = await fetchBusinessData({
+      // Fetch business data
+      const data = await fetchBusinessData({
         apiKey: settingsData.targetronApiKey,
         country: schedule.country,
         city: schedule.city,
@@ -56,23 +58,59 @@ const handler: Handler = async () => {
         withPhone: true,
         withoutPhone: false,
         enrichWithAreaCodes: false,
-        addedFrom: settingsData.fromDate,
-        addedTo: settingsData.toDate,
+        addedFrom: schedule.from_date || new Date().toISOString().split("T")[0],
+        addedTo: schedule.to_date || new Date().toISOString().split("T")[0],
       })
 
-      await sendTelegramMessage(
-        `✅ Scrape for ${schedule.city}, ${schedule.business_type} ran at ${currentHour}:${currentMinute}. ${results.length} records found.`,
-        {
-          botToken: settingsData.telegramBotToken,
-          chatId: settingsData.telegramChatId,
-        }
-      )
+      // Optional email verification
+      const verifiedData = settingsData.connectEmailVerification && settingsData.millionApiKey
+        ? await verifyEmails(data, settingsData.millionApiKey)
+        : data
+
+      // Convert to CSV
+      const csv = parse(verifiedData)
+      const csvBase64 = Buffer.from(csv, "utf-8").toString("base64")
+
+      // Send to Slack
+      await axios.post(SLACK_WEBHOOK_URL, {
+        text: `✅ Scrape completed for *${schedule.city}, ${schedule.business_type}* at ${currentHour}:${currentMinute}. Found ${verifiedData.length} records.`,
+        attachments: [
+          {
+            text: "CSV Preview:",
+            fallback: "CSV Attached",
+            color: "#36a64f",
+            fields: [
+              {
+                title: "City",
+                value: schedule.city,
+                short: true,
+              },
+              {
+                title: "Type",
+                value: schedule.business_type,
+                short: true,
+              },
+              {
+                title: "Records",
+                value: verifiedData.length.toString(),
+                short: true,
+              },
+            ],
+          },
+        ],
+      })
+
+      console.log(`✅ Scrape complete for ${schedule.city} (${verifiedData.length} records)`)
+
     } catch (err) {
-      console.error(`❌ Scrape failed for schedule ${schedule.id}`, err)
+      console.error(`❌ Error running schedule ${schedule.id}`, err)
     }
   }
 
-  return { statusCode: 200, body: "Scheduled scrapes executed" }
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: "Recurring scrape check complete." }),
+  }
 }
 
 export { handler }
