@@ -35,7 +35,7 @@ const handler: Handler = async () => {
   const { data: settingsData, error: settingsError } = await supabase
     .from("settings")
     .select("value")
-    .eq("key", "scrapperSettings")
+    .eq("key", "scraperSettings")
     .limit(1)
 
   if (
