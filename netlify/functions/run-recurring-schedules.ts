@@ -9,8 +9,8 @@ import path from "path"
 import os from "os"
 import FormData from "form-data" // ✅ use Node.js-compatible FormData
 
-const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN || ""
-const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID || ""
+const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
+const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
 
 const handler: Handler = async () => {
   const now = DateTime.now().setZone("Europe/Tirane")
