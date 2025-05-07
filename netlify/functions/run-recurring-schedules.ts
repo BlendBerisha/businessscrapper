@@ -14,13 +14,12 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const headerOrder = [
-  "display_name", "types", "type", "country_code", "state", "city", "county", "street", "postal_code",
-  "enrich area codes", "address", "latitude", "longitude", "phone", "phone_type",
-  "linkedin", "facebook", "twitter", "instagram", "tiktok", "whatsapp", "youtube", "site", "site_generator",
-  "photo", "photos_count", "rating", "rating_history", "reviews", "reviews_link", "range", "business_status",
-  "business_status_history", "booking_appointment_link", "menu_link", "verified", "owner_title", "located_in",
-  "os_id", "google_id", "place_id", "cid", "gmb_link", "located_os_id", "working_hours", "area_service", "about",
+const VERIFIED_HEADERS = [
+  "display_name", "types", "type", "country_code", "state", "city", "county", "street", "postal_code", "enrich area codes",
+  "address", "latitude", "longitude", "phone", "phone_type", "linkedin", "facebook", "twitter", "instagram", "tiktok",
+  "whatsapp", "youtube", "site", "site_generator", "photo", "photos_count", "rating", "rating_history", "reviews", "reviews_link",
+  "range", "business_status", "business_status_history", "booking_appointment_link", "menu_link", "verified", "owner_title",
+  "located_in", "os_id", "google_id", "place_id", "cid", "gmb_link", "located_os_id", "working_hours", "area_service", "about",
   "corp_name", "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
   "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
 ]
@@ -48,8 +47,13 @@ const handler: Handler = async () => {
     .eq("key", "scraperSettings")
     .limit(1)
 
-  if (!settingsData?.length || !settingsData[0].value) {
-    console.error("❌ Error loading settings", settingsError)
+  if (
+    settingsError ||
+    !settingsData ||
+    settingsData.length === 0 ||
+    !settingsData[0].value
+  ) {
+    console.error("❌ Error loading settings from Supabase", settingsError)
     return { statusCode: 500, body: "Error loading settings" }
   }
 
@@ -90,21 +94,23 @@ const handler: Handler = async () => {
 
       console.log(`📦 Fetched ${businessData.length} records from fetchBusinessData`)
 
-      if (!businessData?.length) {
+      if (!businessData || businessData.length === 0) {
         await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`)
+        console.log("⚠️ No data to send to Slack.")
         continue
       }
 
-      const formattedData = businessData.map((item) => {
-        const row: any = {}
-        for (const key of headerOrder) {
-          row[key] = item[key] ?? ""
+      // Format data to match verified_business_data headers
+      const formattedData = businessData.map((entry) => {
+        const output: any = {}
+        for (const key of VERIFIED_HEADERS) {
+          output[key] = entry[key] ?? ""
         }
-        return row
+        return output
       })
 
-      const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headerOrder })
-      XLSX.utils.sheet_add_aoa(worksheet, [headerOrder], { origin: "A1" })
+      const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: VERIFIED_HEADERS })
+      XLSX.utils.sheet_add_aoa(worksheet, [VERIFIED_HEADERS], { origin: "A1" })
 
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
@@ -129,8 +135,7 @@ const handler: Handler = async () => {
       const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
 
       await postSlackMessage(
-        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.
-📎 [Download XLSX](${publicUrl}) – ${businessData.length} records.`
+        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${businessData.length} records.`
       )
 
       console.log("✅ File uploaded & message sent.")
@@ -140,21 +145,24 @@ const handler: Handler = async () => {
     }
   }
 
-  return { statusCode: 200, body: "✅ Done processing schedules" }
+  return {
+    statusCode: 200,
+    body: "✅ Done processing schedules",
+  }
 }
 
 async function postSlackMessage(text: string) {
   try {
-    const res = await axios.post(
-      "https://slack.com/api/chat.postMessage",
-      { channel: SLACK_CHANNEL_ID, text, mrkdwn: true },
-      {
-        headers: {
-          Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      }
-    )
+    const res = await axios.post("https://slack.com/api/chat.postMessage", {
+      channel: SLACK_CHANNEL_ID,
+      text,
+      mrkdwn: true,
+    }, {
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    })
     console.log("📨 postSlackMessage response:", res.data)
   } catch (err) {
     console.error("❌ Failed to send Slack message:", err)
