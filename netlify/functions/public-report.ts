@@ -1,29 +1,20 @@
 import { Handler } from "@netlify/functions"
-import fs from "fs"
-import path from "path"
 
 const handler: Handler = async (event) => {
   const fileName = event.queryStringParameters?.file
-  if (!fileName) {
-    return { statusCode: 400, body: "Missing file parameter" }
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+  if (!fileName || !SUPABASE_URL) {
+    return { statusCode: 400, body: "Missing file parameter or Supabase URL" }
   }
 
-  const filePath = path.join("/tmp", fileName)
-
-  if (!fs.existsSync(filePath)) {
-    return { statusCode: 404, body: "File not found" }
-  }
-
-  const fileBuffer = fs.readFileSync(filePath)
+  const redirectUrl = `${SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
 
   return {
-    statusCode: 200,
+    statusCode: 302,
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      Location: redirectUrl,
     },
-    body: fileBuffer.toString("base64"),
-    isBase64Encoded: true,
   }
 }
 

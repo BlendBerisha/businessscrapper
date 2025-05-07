@@ -4,9 +4,16 @@ import { fetchBusinessData } from "../../actions/targetron"
 import { DateTime } from "luxon"
 import axios from "axios"
 import * as XLSX from "xlsx"
+import { createClient } from "@supabase/supabase-js"
 
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
+
+// ✅ Use service role for uploading to storage
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // stored in Netlify
+)
 
 const handler: Handler = async () => {
   const now = DateTime.now().setZone("Europe/Tirane")
@@ -84,7 +91,6 @@ const handler: Handler = async () => {
         continue
       }
 
-      // Convert to XLSX buffer
       const worksheet = XLSX.utils.json_to_sheet(businessData)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
@@ -93,8 +99,8 @@ const handler: Handler = async () => {
       const timestamp = Date.now()
       const fileName = `scrape_${timestamp}.xlsx`
 
-      // Upload to Supabase Storage
-      const { data: uploaded, error: uploadError } = await supabase.storage
+      // ✅ Upload using service role client
+      const { error: uploadError } = await supabaseAdmin.storage
         .from("scrapes")
         .upload(fileName, xlsxBuffer, {
           contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -102,7 +108,7 @@ const handler: Handler = async () => {
         })
 
       if (uploadError) {
-        console.error("❌ Failed to upload XLSX to Supabase storage:", uploadError)
+        console.error("❌ Upload error:", uploadError)
         await postSlackMessage(`❌ Upload to storage failed for ${schedule.city}`)
         continue
       }
@@ -113,7 +119,7 @@ const handler: Handler = async () => {
         `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${businessData.length} records.`
       )
 
-      console.log("✅ Message with link sent to Slack.")
+      console.log("✅ File uploaded & message sent.")
     } catch (err) {
       console.error(`❌ Error in schedule ID ${schedule.id}`, err)
       await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}. See logs.`)
