@@ -30,51 +30,23 @@ const handler: Handler = async () => {
   const currentHour = now.hour
   const currentMinute = now.minute
 
-  console.log(`🕓 Local time: ${currentDay} ${currentHour}:${currentMinute}`)
-
-  const { data: schedules, error: scheduleError } = await supabase
-    .from("recurring_scrapes")
-    .select("*")
-
-  if (scheduleError || !schedules) {
-    console.error("❌ Error fetching schedules:", scheduleError)
-    return { statusCode: 500, body: "Failed to fetch schedules" }
-  }
-
-  const { data: settingsData, error: settingsError } = await supabase
+  const { data: schedules } = await supabase.from("recurring_scrapes").select("*")
+  const { data: settingsData } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "scraperSettings")
     .limit(1)
 
-  if (
-    settingsError ||
-    !settingsData ||
-    settingsData.length === 0 ||
-    !settingsData[0].value
-  ) {
-    console.error("❌ Error loading settings from Supabase", settingsError)
-    return { statusCode: 500, body: "Error loading settings" }
-  }
-
-  const settings = settingsData[0].value
-  const dueSchedules = schedules.filter(
+  const settings = settingsData?.[0]?.value
+  const dueSchedules = schedules?.filter(
     (s) =>
       s.recurring_days?.includes(currentDay) &&
       s.hour === currentHour &&
       s.minute === currentMinute
-  )
-
-  console.log(`📋 Found ${dueSchedules.length} due schedules`)
-
-  if (dueSchedules.length === 0) {
-    return { statusCode: 200, body: "No schedules due now." }
-  }
+  ) || []
 
   for (const schedule of dueSchedules) {
     try {
-      console.log(`🚀 Running schedule for ${schedule.city}, ${schedule.business_type}`)
-
       const businessData = await fetchBusinessData({
         apiKey: settings.targetronApiKey,
         country: schedule.country,
@@ -92,33 +64,58 @@ const handler: Handler = async () => {
         addedTo: settings.toDate || now.toISODate(),
       })
 
-      console.log(`📦 Fetched ${businessData.length} records from fetchBusinessData`)
-
-      if (!businessData || businessData.length === 0) {
+      if (!businessData?.length) {
         await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`)
-        console.log("⚠️ No data to send to Slack.")
         continue
       }
 
-      // Format data to match verified_business_data headers
-      const formattedData = businessData.map((entry) => {
-        const output: any = {}
-        for (const key of VERIFIED_HEADERS) {
-          output[key] = entry[key] ?? ""
-        }
-        return output
-      })
+      const rows: any[] = []
+      const emailKeys = [
+        ["email_1", "email_1_title", "email_1_first_name", "email_1_last_name"],
+        ["email_2", "email_2_title", "email_2_first_name", "email_2_last_name"],
+        ["email_3", "email_3_title", "email_3_first_name", "email_3_last_name"]
+      ]
 
-      const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: VERIFIED_HEADERS })
+      for (const entry of businessData) {
+        let hasEmail = false
+        for (const [e, title, first, last] of emailKeys) {
+          if (entry[e]) {
+            hasEmail = true
+            const row: any = {}
+            for (const key of VERIFIED_HEADERS) {
+              row[key] = entry[key] ?? ""
+            }
+            row.email = entry[e]
+            row.email_title = entry[title] ?? ""
+            row.email_first_name = entry[first] ?? ""
+            row.email_last_name = entry[last] ?? ""
+            row.is_email_valid = entry.is_email_valid ?? "FALSE"
+            rows.push(row)
+          }
+        }
+
+        if (!hasEmail) {
+          const row: any = {}
+          for (const key of VERIFIED_HEADERS) {
+            row[key] = entry[key] ?? ""
+          }
+          row.email = ""
+          row.email_title = ""
+          row.email_first_name = ""
+          row.email_last_name = ""
+          row.is_email_valid = "FALSE"
+          rows.push(row)
+        }
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: VERIFIED_HEADERS })
       XLSX.utils.sheet_add_aoa(worksheet, [VERIFIED_HEADERS], { origin: "A1" })
 
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
       const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
 
-      const timestamp = Date.now()
-      const fileName = `scrape_${timestamp}.xlsx`
-
+      const fileName = `scrape_${Date.now()}.xlsx`
       const { error: uploadError } = await supabaseAdmin.storage
         .from("scrapes")
         .upload(fileName, xlsxBuffer, {
@@ -135,25 +132,20 @@ const handler: Handler = async () => {
       const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
 
       await postSlackMessage(
-        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${businessData.length} records.`
+        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${rows.length} rows.`
       )
-
-      console.log("✅ File uploaded & message sent.")
     } catch (err) {
       console.error(`❌ Error in schedule ID ${schedule.id}`, err)
-      await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}. See logs.`)
+      await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}.`)
     }
   }
 
-  return {
-    statusCode: 200,
-    body: "✅ Done processing schedules",
-  }
+  return { statusCode: 200, body: "✅ Done processing schedules" }
 }
 
 async function postSlackMessage(text: string) {
   try {
-    const res = await axios.post("https://slack.com/api/chat.postMessage", {
+    await axios.post("https://slack.com/api/chat.postMessage", {
       channel: SLACK_CHANNEL_ID,
       text,
       mrkdwn: true,
@@ -163,7 +155,6 @@ async function postSlackMessage(text: string) {
         "Content-Type": "application/json",
       },
     })
-    console.log("📨 postSlackMessage response:", res.data)
   } catch (err) {
     console.error("❌ Failed to send Slack message:", err)
   }
