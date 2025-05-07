@@ -37,12 +37,7 @@ const handler: Handler = async () => {
     .eq("key", "scraperSettings")
     .limit(1)
 
-  if (
-    settingsError ||
-    !settingsData ||
-    settingsData.length === 0 ||
-    !settingsData[0].value
-  ) {
+  if (settingsError || !settingsData || settingsData.length === 0 || !settingsData[0].value) {
     console.error("❌ Error loading settings from Supabase", settingsError)
     return { statusCode: 500, body: "Error loading settings" }
   }
@@ -90,7 +85,23 @@ const handler: Handler = async () => {
         continue
       }
 
-      const worksheet = XLSX.utils.json_to_sheet(businessData)
+      const formattedData = businessData.map((item) => ({
+        ...item,
+        email: "",
+        email_title: "",
+        email_first_name: "",
+        email_last_name: "",
+        is_email_valid: "",
+      }))
+
+      const headerOrder = [
+        "id", "name", "phone", "address", "city", "state", "country", "postal_code",
+        "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
+      ]
+
+      const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: headerOrder })
+      XLSX.utils.sheet_add_aoa(worksheet, [headerOrder], { origin: "A1" })
+
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
       const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
