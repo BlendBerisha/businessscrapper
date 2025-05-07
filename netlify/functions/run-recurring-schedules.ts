@@ -5,14 +5,14 @@ import { DateTime } from "luxon"
 import axios from "axios"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
+import { Readable } from "stream"
 
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
 
-// ✅ Use service role for uploading to storage
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // stored in Netlify
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 const handler: Handler = async () => {
@@ -38,17 +38,13 @@ const handler: Handler = async () => {
     .eq("key", "scraperSettings")
     .limit(1)
 
-  if (
-    settingsError ||
-    !settingsData ||
-    settingsData.length === 0 ||
-    !settingsData[0].value
-  ) {
+  if (settingsError || !settingsData?.[0]?.value) {
     console.error("❌ Error loading settings from Supabase", settingsError)
     return { statusCode: 500, body: "Error loading settings" }
   }
 
   const settings = settingsData[0].value
+
   const dueSchedules = schedules.filter(
     (s) =>
       s.recurring_days?.includes(currentDay) &&
@@ -83,26 +79,26 @@ const handler: Handler = async () => {
         addedTo: settings.toDate || now.toISODate(),
       })
 
-      console.log(`📦 Fetched ${businessData.length} records from fetchBusinessData`)
+      console.log(`📦 Fetched ${businessData.length} records`)
 
       if (!businessData || businessData.length === 0) {
         await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`)
-        console.log("⚠️ No data to send to Slack.")
         continue
       }
 
       const worksheet = XLSX.utils.json_to_sheet(businessData)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
-      const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
 
+      const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
       const timestamp = Date.now()
       const fileName = `scrape_${timestamp}.xlsx`
 
-      // ✅ Upload using service role client
+      // ✅ Upload using stream
+      const stream = Readable.from(buffer)
       const { error: uploadError } = await supabaseAdmin.storage
         .from("scrapes")
-        .upload(fileName, xlsxBuffer, {
+        .upload(fileName, stream as any, {
           contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           upsert: true,
         })
@@ -116,7 +112,7 @@ const handler: Handler = async () => {
       const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
 
       await postSlackMessage(
-        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${businessData.length} records.`
+        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 <${publicUrl}|Download XLSX> – ${businessData.length} records.`
       )
 
       console.log("✅ File uploaded & message sent.")
@@ -144,9 +140,9 @@ async function postSlackMessage(text: string) {
         "Content-Type": "application/json",
       },
     })
-    console.log("📨 postSlackMessage response:", res.data)
+    console.log("📨 Slack message sent:", res.data)
   } catch (err) {
-    console.error("❌ Failed to send Slack message:", err)
+    console.error("❌ Slack message failed:", err)
   }
 }
 
