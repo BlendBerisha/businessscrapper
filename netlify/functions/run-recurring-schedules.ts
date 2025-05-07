@@ -1,37 +1,34 @@
 import { Handler } from "@netlify/functions"
 import { supabase } from "../../lib/supabase"
 import { fetchBusinessData } from "../../actions/targetron"
-import { parse } from "json2csv"
-import axios from "axios"
 import { DateTime } from "luxon"
+import axios from "axios"
+import * as XLSX from "xlsx"
+import fs from "fs"
+import path from "path"
+import os from "os"
+import FormData from "form-data" // ✅ use Node.js-compatible FormData
 
-// ✅ Slack webhook
-const SLACK_WEBHOOK_URL =
-  "https://hooks.slack.com/services/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"
+const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN || "REMOVED_SECRET"
+const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID || "C08R63SDY91"
 
 const handler: Handler = async () => {
-  // ⏰ Use local time zone (Europe/Tirane)
   const now = DateTime.now().setZone("Europe/Tirane")
-  const currentDay = now.toFormat("cccc") // e.g. "Tuesday"
+  const currentDay = now.toFormat("cccc")
   const currentHour = now.hour
   const currentMinute = now.minute
 
-  console.log(`🕓 Current time in Europe/Tirane: ${currentDay} ${currentHour}:${currentMinute}`)
+  console.log(`🕓 Local time: ${currentDay} ${currentHour}:${currentMinute}`)
 
-  // ✅ Load recurring scrape schedules
   const { data: schedules, error: scheduleError } = await supabase
     .from("recurring_scrapes")
     .select("*")
 
   if (scheduleError || !schedules) {
     console.error("❌ Error fetching schedules:", scheduleError)
-    return {
-      statusCode: 500,
-      body: "❌ Failed to fetch recurring scrape schedules",
-    }
+    return { statusCode: 500, body: "Failed to fetch schedules" }
   }
 
-  // ✅ Load shared settings (like API keys)
   const { data: settingsData, error: settingsError } = await supabase
     .from("settings")
     .select("value")
@@ -45,14 +42,10 @@ const handler: Handler = async () => {
     !settingsData[0].value
   ) {
     console.error("❌ Error loading settings from Supabase", settingsError)
-    return {
-      statusCode: 500,
-      body: "❌ Error loading settings from Supabase",
-    }
+    return { statusCode: 500, body: "Error loading settings" }
   }
 
   const settings = settingsData[0].value
-
   const dueSchedules = schedules.filter(
     (s) =>
       s.recurring_days?.includes(currentDay) &&
@@ -61,11 +54,8 @@ const handler: Handler = async () => {
   )
 
   if (dueSchedules.length === 0) {
-    console.log("⏱ No schedules due at this time.")
-    return {
-      statusCode: 200,
-      body: "No schedules due at this time.",
-    }
+    console.log("⏱ No schedules due now.")
+    return { statusCode: 200, body: "No schedules due now." }
   }
 
   for (const schedule of dueSchedules) {
@@ -83,33 +73,70 @@ const handler: Handler = async () => {
         withPhone: true,
         withoutPhone: false,
         enrichWithAreaCodes: false,
-        addedFrom: settings.fromDate || new Date().toISOString().split("T")[0],
-        addedTo: settings.toDate || new Date().toISOString().split("T")[0],
+        addedFrom: settings.fromDate || now.toISODate(),
+        addedTo: settings.toDate || now.toISODate(),
       })
 
-      const csv = parse(businessData)
+      if (!businessData || businessData.length === 0) {
+        await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`)
+        continue
+      }
 
-      // ✅ Notify Slack
-      await axios.post(SLACK_WEBHOOK_URL, {
-        text: `✅ Scheduled scrape ran for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\nRecords found: ${businessData.length}`,
-      })
+      // ✅ Convert to XLSX and save temporarily
+      const worksheet = XLSX.utils.json_to_sheet(businessData)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
 
-      // ✅ Send CSV preview (optional)
-      await axios.post(SLACK_WEBHOOK_URL, {
-        text: "```\n" + csv.slice(0, 2800) + "\n```", // Slack limit is ~3000 chars
-      })
+      const tmpDir = os.tmpdir()
+      const filePath = path.join(tmpDir, `scrape_${Date.now()}.xlsx`)
+      XLSX.writeFile(workbook, filePath)
+
+      // ✅ Upload to Slack
+      await uploadFileToSlack(filePath, `Scrape Results – ${schedule.city}`, `Results for ${schedule.business_type} in ${schedule.city}`)
+
+      // ✅ Confirm upload
+      await postSlackMessage(`✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}. Uploaded ${businessData.length} records.`)
+
+      // ✅ Cleanup
+      fs.unlinkSync(filePath)
     } catch (err) {
-      console.error(`❌ Scrape failed for schedule ID ${schedule.id}`, err)
-      await axios.post(SLACK_WEBHOOK_URL, {
-        text: `❌ Scrape failed for schedule ID ${schedule.id}. Check server logs.`,
-      })
+      console.error(`❌ Error in schedule ID ${schedule.id}`, err)
+      await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}. See logs.`)
     }
   }
 
   return {
     statusCode: 200,
-    body: "✅ All due schedules processed",
+    body: "✅ Done processing schedules",
   }
+}
+
+async function postSlackMessage(text: string) {
+  await axios.post("https://slack.com/api/chat.postMessage", {
+    channel: SLACK_CHANNEL_ID,
+    text,
+  }, {
+    headers: {
+      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+  })
+}
+
+async function uploadFileToSlack(filePath: string, title: string, initialComment: string) {
+  const formData = new FormData()
+  formData.append("file", fs.createReadStream(filePath))
+  formData.append("filename", path.basename(filePath))
+  formData.append("channels", SLACK_CHANNEL_ID)
+  formData.append("title", title)
+  formData.append("initial_comment", initialComment)
+
+  const headers = {
+    Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+    ...formData.getHeaders(),
+  }
+
+  await axios.post("https://slack.com/api/files.upload", formData, { headers })
 }
 
 export { handler }
