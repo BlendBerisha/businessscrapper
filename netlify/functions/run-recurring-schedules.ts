@@ -7,7 +7,7 @@ import * as XLSX from "xlsx"
 import fs from "fs"
 import path from "path"
 import os from "os"
-import FormData from "form-data" // ✅ use Node.js-compatible FormData
+import FormData from "form-data"
 
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
@@ -53,13 +53,16 @@ const handler: Handler = async () => {
       s.minute === currentMinute
   )
 
+  console.log(`📋 Found ${dueSchedules.length} due schedules`)
+
   if (dueSchedules.length === 0) {
-    console.log("⏱ No schedules due now.")
     return { statusCode: 200, body: "No schedules due now." }
   }
 
   for (const schedule of dueSchedules) {
     try {
+      console.log(`🚀 Running schedule for ${schedule.city}, ${schedule.business_type}`)
+
       const businessData = await fetchBusinessData({
         apiKey: settings.targetronApiKey,
         country: schedule.country,
@@ -77,12 +80,14 @@ const handler: Handler = async () => {
         addedTo: settings.toDate || now.toISODate(),
       })
 
+      console.log(`📦 Fetched ${businessData.length} records from fetchBusinessData`)
+
       if (!businessData || businessData.length === 0) {
         await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`)
+        console.log("⚠️ No data to send to Slack.")
         continue
       }
 
-      // ✅ Convert to XLSX and save temporarily
       const worksheet = XLSX.utils.json_to_sheet(businessData)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
@@ -91,14 +96,16 @@ const handler: Handler = async () => {
       const filePath = path.join(tmpDir, `scrape_${Date.now()}.xlsx`)
       XLSX.writeFile(workbook, filePath)
 
-      // ✅ Upload to Slack
+      console.log(`📁 XLSX file written: ${filePath}`)
+
       await uploadFileToSlack(filePath, `Scrape Results – ${schedule.city}`, `Results for ${schedule.business_type} in ${schedule.city}`)
+      console.log("✅ File uploaded to Slack.")
 
-      // ✅ Confirm upload
       await postSlackMessage(`✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}. Uploaded ${businessData.length} records.`)
+      console.log("✅ Message sent to Slack.")
 
-      // ✅ Cleanup
       fs.unlinkSync(filePath)
+      console.log("🧹 Temp file deleted.")
     } catch (err) {
       console.error(`❌ Error in schedule ID ${schedule.id}`, err)
       await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}. See logs.`)
@@ -112,15 +119,20 @@ const handler: Handler = async () => {
 }
 
 async function postSlackMessage(text: string) {
-  await axios.post("https://slack.com/api/chat.postMessage", {
-    channel: SLACK_CHANNEL_ID,
-    text,
-  }, {
-    headers: {
-      Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-  })
+  try {
+    const res = await axios.post("https://slack.com/api/chat.postMessage", {
+      channel: SLACK_CHANNEL_ID,
+      text,
+    }, {
+      headers: {
+        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    })
+    console.log("📨 postSlackMessage response:", res.data)
+  } catch (err) {
+    console.error("❌ Failed to send Slack message:", err)
+  }
 }
 
 async function uploadFileToSlack(filePath: string, title: string, initialComment: string) {
@@ -136,7 +148,12 @@ async function uploadFileToSlack(filePath: string, title: string, initialComment
     ...formData.getHeaders(),
   }
 
-  await axios.post("https://slack.com/api/files.upload", formData, { headers })
+  try {
+    const res = await axios.post("https://slack.com/api/files.upload", formData, { headers })
+    console.log("📤 uploadFileToSlack response:", res.data)
+  } catch (err) {
+    console.error("❌ Failed to upload file to Slack:", err)
+  }
 }
 
 export { handler }
