@@ -4,9 +4,6 @@ import { fetchBusinessData } from "../../actions/targetron"
 import { DateTime } from "luxon"
 import axios from "axios"
 import * as XLSX from "xlsx"
-import fs from "fs"
-import path from "path"
-import os from "os"
 
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
@@ -87,20 +84,35 @@ const handler: Handler = async () => {
         continue
       }
 
+      // Convert to XLSX buffer
       const worksheet = XLSX.utils.json_to_sheet(businessData)
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
+      const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
 
       const timestamp = Date.now()
       const fileName = `scrape_${timestamp}.xlsx`
-      const filePath = path.join(os.tmpdir(), fileName)
-      XLSX.writeFile(workbook, filePath)
 
-      console.log(`📁 XLSX file written: ${filePath}`)
+      // Upload to Supabase Storage
+      const { data: uploaded, error: uploadError } = await supabase.storage
+        .from("scrapes")
+        .upload(fileName, xlsxBuffer, {
+          contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          upsert: true,
+        })
 
-      const publicLink = `https://businessscrapper.netlify.app/.netlify/functions/public-report?file=${fileName}`
+      if (uploadError) {
+        console.error("❌ Failed to upload XLSX to Supabase storage:", uploadError)
+        await postSlackMessage(`❌ Upload to storage failed for ${schedule.city}`)
+        continue
+      }
 
-      await postSlackMessage(`✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicLink}) – ${businessData.length} records.`)
+      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
+
+      await postSlackMessage(
+        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${businessData.length} records.`
+      )
+
       console.log("✅ Message with link sent to Slack.")
     } catch (err) {
       console.error(`❌ Error in schedule ID ${schedule.id}`, err)
