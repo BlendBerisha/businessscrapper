@@ -98,7 +98,7 @@ const handler: Handler = async () => {
 
       console.log(`📁 XLSX file written: ${filePath}`)
 
-      const publicLink = `https://${process.env.URL}/.netlify/functions/public-report?file=${fileName}`
+      const publicLink = `https://businessscrapper.netlify.app/.netlify/functions/public-report?file=${fileName}`
 
       await postSlackMessage(`✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicLink}) – ${businessData.length} records.`)
       console.log("✅ Message with link sent to Slack.")
