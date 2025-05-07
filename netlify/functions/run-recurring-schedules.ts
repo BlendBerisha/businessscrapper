@@ -7,7 +7,6 @@ import * as XLSX from "xlsx"
 import fs from "fs"
 import path from "path"
 import os from "os"
-import FormData from "form-data"
 
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
 const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
@@ -92,20 +91,17 @@ const handler: Handler = async () => {
       const workbook = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
 
-      const tmpDir = os.tmpdir()
-      const filePath = path.join(tmpDir, `scrape_${Date.now()}.xlsx`)
+      const timestamp = Date.now()
+      const fileName = `scrape_${timestamp}.xlsx`
+      const filePath = path.join(os.tmpdir(), fileName)
       XLSX.writeFile(workbook, filePath)
 
       console.log(`📁 XLSX file written: ${filePath}`)
 
-      await uploadFileToSlack(filePath, `Scrape Results – ${schedule.city}`, `Results for ${schedule.business_type} in ${schedule.city}`)
-      console.log("✅ File uploaded to Slack.")
+      const publicLink = `https://${process.env.URL}/.netlify/functions/public-report?file=${fileName}`
 
-      await postSlackMessage(`✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}. Uploaded ${businessData.length} records.`)
-      console.log("✅ Message sent to Slack.")
-
-      fs.unlinkSync(filePath)
-      console.log("🧹 Temp file deleted.")
+      await postSlackMessage(`✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicLink}) – ${businessData.length} records.`)
+      console.log("✅ Message with link sent to Slack.")
     } catch (err) {
       console.error(`❌ Error in schedule ID ${schedule.id}`, err)
       await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}. See logs.`)
@@ -123,6 +119,7 @@ async function postSlackMessage(text: string) {
     const res = await axios.post("https://slack.com/api/chat.postMessage", {
       channel: SLACK_CHANNEL_ID,
       text,
+      mrkdwn: true,
     }, {
       headers: {
         Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
@@ -132,27 +129,6 @@ async function postSlackMessage(text: string) {
     console.log("📨 postSlackMessage response:", res.data)
   } catch (err) {
     console.error("❌ Failed to send Slack message:", err)
-  }
-}
-
-async function uploadFileToSlack(filePath: string, title: string, initialComment: string) {
-  const formData = new FormData()
-  formData.append("file", fs.createReadStream(filePath))
-  formData.append("filename", path.basename(filePath))
-  formData.append("channels", SLACK_CHANNEL_ID)
-  formData.append("title", title)
-  formData.append("initial_comment", initialComment)
-
-  const headers = {
-    Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-    ...formData.getHeaders(),
-  }
-
-  try {
-    const res = await axios.post("https://slack.com/api/files.upload", formData, { headers })
-    console.log("📤 uploadFileToSlack response:", res.data)
-  } catch (err) {
-    console.error("❌ Failed to upload file to Slack:", err)
   }
 }
 
