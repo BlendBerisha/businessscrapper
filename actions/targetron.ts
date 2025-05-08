@@ -8,7 +8,7 @@ interface TargetronParams {
   city: string
   state: string
   postalCode?: string
-  businessType: string
+  businessType?: string
   businessStatus: string
   limit: number
   skipTimes: number

@@ -125,7 +125,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       city: formData.city,
       state: formData.state,
       postalCode: formData.postalCode,
-      businessType: formData.businessType,
+      businessType: formData.businessType || undefined,
       businessStatus: formData.businessStatus,
       limit: formData.limit,
       skipTimes: formData.skipTimes,
