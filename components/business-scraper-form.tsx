@@ -595,15 +595,18 @@ useEffect(() => {
                 {/* API Request Settings */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="limit">Limit per Request</Label>
-                    <Input
-                      id="limit"
-                      type="number"
-                      value={Number.isFinite(formData.limit) ? formData.limit : ""}
-                      onChange={(e) => handleChange("limit", parseInt(e.target.value) || 0)}
-                      min={1}
-                      max={100}
-                    />
+                  <Label htmlFor="limit">Limit per Request</Label>
+<Input
+  id="limit"
+  type="number"
+  value={formData.limit ?? ""}
+  onChange={(e) => {
+    const val = e.target.value
+    handleChange("limit", val === "" ? null : Number.parseInt(val))
+  }}
+  min={1}
+  max={100}
+/>
                     <p className="text-xs text-gray-500">Number of records per API request</p>
                   </div>
                   <div className="space-y-2">
