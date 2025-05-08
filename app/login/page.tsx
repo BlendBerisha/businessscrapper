@@ -25,20 +25,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto mt-20 space-y-6">
-      <h1 className="text-xl font-semibold">Login</h1>
-      <form onSubmit={handleLogin} className="space-y-4">
-        <div>
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-        </div>
-        <div>
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-        </div>
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <Button type="submit" className="w-full">Login</Button>
-      </form>
-    </div>
+<div className="min-h-screen flex items-center justify-center px-4">
+  <div className="max-w-md w-full space-y-6">
+    <h1 className="text-xl font-semibold text-center">Login</h1>
+    <form onSubmit={handleLogin} className="space-y-4">
+      <div>
+        <Label htmlFor="email">Email</Label>
+        <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+      </div>
+      <div>
+        <Label htmlFor="password">Password</Label>
+        <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+      </div>
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+      <Button type="submit" className="w-full">Login</Button>
+    </form>
+  </div>
+</div>
   )
 }

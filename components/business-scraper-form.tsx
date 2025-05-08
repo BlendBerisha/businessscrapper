@@ -473,6 +473,8 @@ async function handleDeleteRecurring(id: string) {
 useEffect(() => {
   fetchRecurringSchedules().then(setRecurringSchedules)
 }, [])
+const [currentPage, setCurrentPage] = useState(1)
+const schedulesPerPage = 10
 
   return (
     <Card className="shadow-lg border-0">
@@ -777,56 +779,75 @@ useEffect(() => {
   </div>
 
   {useRecurringSettings && (
-    <>
-      <h3 className="text-sm font-medium">Recurring settings</h3>
+  <>
+    <h3 className="text-sm font-medium">Recurring settings</h3>
 
-      <div className="space-y-2">
-        <Label>Select Days of the Week</Label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
-            <label key={day} className="flex items-center space-x-2">
-              <Checkbox
-                checked={selectedDays.includes(day)}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    setSelectedDays((prev) => [...prev, day])
-                  } else {
-                    setSelectedDays((prev) => prev.filter((d) => d !== day))
-                  }
-                }}
-              />
-              <span>{day}</span>
-            </label>
-          ))}
-        </div>
+    <div className="space-y-2">
+      <Label>Select Days of the Week</Label>
+
+      {/* Everyday checkbox */}
+      <div className="flex items-center space-x-2 mb-2">
+        <Checkbox
+          id="everyday"
+          checked={selectedDays.length === 7}
+          onCheckedChange={(checked) => {
+            if (checked) {
+              setSelectedDays(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
+            } else {
+              setSelectedDays([]);
+            }
+          }}
+        />
+        <Label htmlFor="everyday" className="cursor-pointer">Everyday</Label>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1">
-          <Label>Hour</Label>
-          <Input
-            type="number"
-            min="0"
-            max="23"
-            value={recurringHour}
-            onChange={(e) => setRecurringHour(e.target.value)}
-            placeholder="e.g. 13 for 1 PM"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label>Minute</Label>
-          <Input
-            type="number"
-            min="0"
-            max="59"
-            value={recurringMinute}
-            onChange={(e) => setRecurringMinute(e.target.value)}
-            placeholder="e.g. 30"
-          />
-        </div>
+      {/* Individual day checkboxes */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
+          <label key={day} className="flex items-center space-x-2">
+            <Checkbox
+              checked={selectedDays.includes(day)}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setSelectedDays((prev) => [...prev, day])
+                } else {
+                  setSelectedDays((prev) => prev.filter((d) => d !== day))
+                }
+              }}
+            />
+            <span>{day}</span>
+          </label>
+        ))}
       </div>
-    </>
-  )}
+    </div>
+
+    {/* Hour & Minute Inputs */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-1">
+        <Label>Hour</Label>
+        <Input
+          type="number"
+          min="0"
+          max="23"
+          value={recurringHour}
+          onChange={(e) => setRecurringHour(e.target.value)}
+          placeholder="e.g. 13 for 1 PM"
+        />
+      </div>
+      <div className="space-y-1">
+        <Label>Minute</Label>
+        <Input
+          type="number"
+          min="0"
+          max="59"
+          value={recurringMinute}
+          onChange={(e) => setRecurringMinute(e.target.value)}
+          placeholder="e.g. 30"
+        />
+      </div>
+    </div>
+  </>
+)}
 </div>
 
 
@@ -872,62 +893,89 @@ useEffect(() => {
             </form>
           </TabsContent>
           <TabsContent value="recurring">
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Scheduled Scrapes</h3>
+  <div className="space-y-4">
+    <h3 className="text-lg font-medium">Scheduled Scrapes</h3>
+  </div>
 
-       
+  {recurringSchedules.length === 0 ? (
+    <p className="text-sm text-muted-foreground">No schedules found.</p>
+  ) : (
+    <>
+      <div className="overflow-auto border rounded-md">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">Date</th>
+              <th className="px-4 py-2 text-left font-medium">Time</th>
+              <th className="px-4 py-2 text-left font-medium">Recurring Days</th>
+              <th className="px-4 py-2 text-left font-medium">City</th>
+              <th className="px-4 py-2 text-left font-medium">Type</th>
+              <th className="px-4 py-2 text-left font-medium">Limit</th>
+              <th className="px-4 py-2 text-left font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {recurringSchedules
+              .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
+              .map((schedule) => (
+                <tr key={schedule.id}>
+                  <td className="px-4 py-2">{schedule.date || "-"}</td>
+                  <td className="px-4 py-2">
+                    {schedule.hour !== null && schedule.minute !== null
+                      ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`
+                      : "-"}
+                  </td>
+                  <td className="px-4 py-2">
+                    {schedule.recurring_days?.length > 0
+                      ? schedule.recurring_days.join(", ")
+                      : "-"}
+                  </td>
+                  <td className="px-4 py-2">{schedule.city || "-"}</td>
+                  <td className="px-4 py-2">{schedule.business_type || "-"}</td>
+                  <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
+                  <td className="px-4 py-2">
+                    <button
+                      onClick={() => handleDeleteRecurring(schedule.id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      ❌
+                    </button>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
 
-
-            </div>
-            {recurringSchedules.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No schedules found.</p>
-            ) : (
-              <div className="overflow-auto border rounded-md">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium">Date</th>
-                      <th className="px-4 py-2 text-left font-medium">Time</th>
-                      <th className="px-4 py-2 text-left font-medium">Recurring Days</th>
-                      <th className="px-4 py-2 text-left font-medium">City</th>
-                      <th className="px-4 py-2 text-left font-medium">Type</th>
-                      <th className="px-4 py-2 text-left font-medium">Limit</th>
-                      <th className="px-4 py-2 text-left font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {recurringSchedules.map((schedule) => (
-                      <tr key={schedule.id}>
-                        <td className="px-4 py-2">{schedule.date || "-"}</td>
-                        <td className="px-4 py-2">
-  {schedule.hour !== null && schedule.minute !== null
-    ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`
-    : "-"}
-</td>
-                        <td className="px-4 py-2">
-                          {schedule.recurring_days?.length > 0
-                            ? schedule.recurring_days.join(", ")
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-2">{schedule.city || "-"}</td>
-                        <td className="px-4 py-2">{schedule.business_type || "-"}</td>
-                        <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
-                        <td className="px-4 py-2">
-                          <button
-                            onClick={() => handleDeleteRecurring(schedule.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            ❌
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-          </TabsContent>
+      {/* Pagination */}
+      <div className="flex justify-between items-center mt-4 px-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </Button>
+        <span className="text-sm">
+          Page {currentPage} of {Math.ceil(recurringSchedules.length / schedulesPerPage)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setCurrentPage((prev) =>
+              prev < Math.ceil(recurringSchedules.length / schedulesPerPage) ? prev + 1 : prev
+            )
+          }
+          disabled={currentPage === Math.ceil(recurringSchedules.length / schedulesPerPage)}
+        >
+          Next
+        </Button>
+      </div>
+    </>
+  )}
+</TabsContent>
 
         </Tabs>
       </CardContent>
