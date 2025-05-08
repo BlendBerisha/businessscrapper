@@ -811,34 +811,21 @@ useEffect(() => {
                 </p>
 
                 {/* Submit Button */}
-                <Button type="submit" disabled={isLoading} className="w-full md:w-1/2">
-    {isLoading ? (
-      <>
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Processing...
-      </>
-    ) : (
-      "Start Scraping"
-    )}
-  </Button>
-
-  {/* Timed Scrape Button */}
-  <Button
-    type="button"
-    variant="outline"
-    onClick={handleAddRecurring}
-    disabled={isLoading || !useRecurringSettings}
-    className="w-full md:w-1/2"
-  >
-    {isLoading ? (
-      <>
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Scheduling...
-      </>
-    ) : (
-      "Start Timed Scraping"
-    )}
-  </Button>
+                <Button
+  type={useRecurringSettings ? "button" : "submit"}
+  onClick={useRecurringSettings ? handleAddRecurring : undefined}
+  disabled={isLoading}
+  className="w-full md:w-1/2"
+>
+  {isLoading ? (
+    <>
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      {useRecurringSettings ? "Scheduling..." : "Processing..."}
+    </>
+  ) : (
+    useRecurringSettings ? "Start Timed Scraping" : "Start Scraping"
+  )}
+</Button>
 
                 {/* Download Buttons - Only show if data is available */}
               </div>
