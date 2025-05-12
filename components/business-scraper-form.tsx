@@ -466,7 +466,7 @@ const handleAddRecurring = async () => {
     return
   }
 
-  // ✅ Fetch existing for same business_type, city, country
+  // 🔍 Fetch all existing for same business_type, city, country
   const { data: existing } = await supabase
     .from("recurring_scrapes")
     .select("record_limit")
@@ -476,7 +476,8 @@ const handleAddRecurring = async () => {
 
   const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
 
-  const newSkipTimes = Math.floor(totalLimit / formData.limit)
+  // ✅ Always start from 1
+  const newSkipTimes = Math.floor(totalLimit / formData.limit) + 1
 
   const newSchedule = {
     hour: parseInt(recurringHour),
