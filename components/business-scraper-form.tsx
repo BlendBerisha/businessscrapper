@@ -984,48 +984,50 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
     <>
       <div className="overflow-auto border rounded-md">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-2 text-left font-medium">Date</th>
-              <th className="px-4 py-2 text-left font-medium">Time</th>
-              <th className="px-4 py-2 text-left font-medium">Recurring Days</th>
-              <th className="px-4 py-2 text-left font-medium">City</th>
-              <th className="px-4 py-2 text-left font-medium">Type</th>
-              <th className="px-4 py-2 text-left font-medium">Limit</th>
-              <th className="px-4 py-2 text-left font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-          {recurringSchedules
-  .filter((s) => s.source === "recurring" || !["completed", "failed", "no_results"].includes(s.status))
-  .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
-  .map((schedule) => (
-                <tr key={schedule.id}>
-                  <td className="px-4 py-2">{schedule.date || "-"}</td>
-                  <td className="px-4 py-2">
-                    {schedule.hour !== null && schedule.minute !== null
-                      ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`
-                      : "-"}
-                  </td>
-                  <td className="px-4 py-2">
-                    {schedule.recurring_days?.length > 0
-                      ? schedule.recurring_days.join(", ")
-                      : "-"}
-                  </td>
-                  <td className="px-4 py-2">{schedule.city || "-"}</td>
-                  <td className="px-4 py-2">{schedule.business_type || "-"}</td>
-                  <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
-                  <td className="px-4 py-2">
-                    <button
-                      onClick={() => handleDeleteRecurring(schedule.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      ❌
-                    </button>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
+        <thead className="bg-gray-50">
+  <tr>
+    <th className="px-4 py-2 text-left font-medium">Date</th>
+    <th className="px-4 py-2 text-left font-medium">Time</th>
+    <th className="px-4 py-2 text-left font-medium">Recurring Days</th>
+    <th className="px-4 py-2 text-left font-medium">City</th>
+    <th className="px-4 py-2 text-left font-medium">Type</th>
+    <th className="px-4 py-2 text-left font-medium">Limit</th>
+    <th className="px-4 py-2 text-left font-medium">Skip Times</th> {/* 👈 new column */}
+    <th className="px-4 py-2 text-left font-medium">Actions</th>
+  </tr>
+</thead>
+<tbody className="divide-y divide-gray-100">
+  {recurringSchedules
+    .filter((s) => s.source === "recurring" || !["completed", "failed", "no_results"].includes(s.status))
+    .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
+    .map((schedule) => (
+      <tr key={schedule.id}>
+        <td className="px-4 py-2">{schedule.date || "-"}</td>
+        <td className="px-4 py-2">
+          {schedule.hour !== null && schedule.minute !== null
+            ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`
+            : "-"}
+        </td>
+        <td className="px-4 py-2">
+          {schedule.recurring_days?.length > 0
+            ? schedule.recurring_days.join(", ")
+            : "-"}
+        </td>
+        <td className="px-4 py-2">{schedule.city || "-"}</td>
+        <td className="px-4 py-2">{schedule.business_type || "-"}</td>
+        <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
+        <td className="px-4 py-2">{schedule.skip_times ?? "-"}</td> {/* 👈 show skip_times */}
+        <td className="px-4 py-2">
+          <button
+            onClick={() => handleDeleteRecurring(schedule.id)}
+            className="text-red-600 hover:text-red-800"
+          >
+            ❌
+          </button>
+        </td>
+      </tr>
+    ))}
+</tbody>
         </table>
       </div>
 
