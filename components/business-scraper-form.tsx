@@ -936,18 +936,19 @@ const schedulesPerPage = 10
                 <Button
   type="button"
   onClick={useRecurringSettings ? handleAddRecurring : handleQueueScrape}
-  disabled={isLoading}
+  disabled={useRecurringSettings && isLoading} // ❗only lock if recurring
   className="w-full"
 >
-  {isLoading ? (
+  {isLoading && useRecurringSettings ? (
     <>
       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      {useRecurringSettings ? "Scheduling..." : "Adding to queue..."}
+      Scheduling...
     </>
   ) : (
     useRecurringSettings ? "Start Timed Scraping" : "Start Scraping"
   )}
 </Button>
+
 
                 {/* Download Buttons - Only show if data is available */}
               </div>

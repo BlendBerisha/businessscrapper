@@ -198,17 +198,30 @@ function applyFormatting(worksheet: XLSX.WorkSheet, columnOrder: string[]): void
 }
 
 export async function fetchRecurringSchedules() {
-  const { data, error } = await supabase
+  const { data: recurring } = await supabase
     .from("recurring_scrapes")
     .select("*")
-    .order("created_at", { ascending: false })
 
-  if (error) {
-    console.error("Failed to fetch schedules:", error.message)
-    return []
-  }
+  const { data: queued } = await supabase
+    .from("scrape_queue")
+    .select("*")
+    .not("status", "in", '("completed", "failed", "no_results")')
 
-  return data
+  const recurringFormatted = (recurring || []).map((r) => ({
+    ...r,
+    source: "recurring",
+  }))
+
+  const queuedFormatted = (queued || []).map((q) => ({
+    ...q,
+    date: q.created_at,
+    recurring_days: [],
+    hour: null,
+    minute: null,
+    source: "queued",
+  }))
+
+  return [...recurringFormatted, ...queuedFormatted]
 }
 
 export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promise<Blob> {
