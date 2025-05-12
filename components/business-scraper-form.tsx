@@ -466,7 +466,10 @@ const handleAddRecurring = async () => {
     return
   }
 
-  // 🔍 Fetch all existing for same business_type, city, country
+  // ✅ Force limit to 100 when recurring is enabled
+  const forcedLimit = 100
+
+  // 🔍 Get existing entries for the same business_type + city + country
   const { data: existing } = await supabase
     .from("recurring_scrapes")
     .select("record_limit")
@@ -474,17 +477,18 @@ const handleAddRecurring = async () => {
     .eq("city", formData.city)
     .eq("country", formData.country)
 
+  // 🧮 Sum all previous limits for matching records
   const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
 
-  // ✅ Always start from 1
-  const newSkipTimes = Math.floor(totalLimit / formData.limit) + 1
+  // ✅ Skip time = floor(totalLimit / 100) + 1
+  const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1
 
   const newSchedule = {
     hour: parseInt(recurringHour),
     minute: parseInt(recurringMinute),
     recurring_days: selectedDays,
     created_at: new Date().toISOString(),
-    record_limit: formData.limit,
+    record_limit: forcedLimit,
     skip_times: newSkipTimes,
     add_to_campaign: formData.addtocampaign,
     city: formData.city,
@@ -709,16 +713,19 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                   <Label htmlFor="limit">Limit per Request</Label>
-<Input
+                  <Input
   id="limit"
   type="number"
-  value={formData.limit ?? ""}
+  value={useRecurringSettings ? 100 : formData.limit ?? ""}
   onChange={(e) => {
     const val = e.target.value
-    handleChange("limit", val === "" ? null : Number.parseInt(val))
+    if (!useRecurringSettings) {
+      handleChange("limit", val === "" ? null : parseInt(val))
+    }
   }}
   min={1}
   max={100}
+  disabled={useRecurringSettings}
 />
                     <p className="text-xs text-gray-500">Number of records per API request</p>
                   </div>
