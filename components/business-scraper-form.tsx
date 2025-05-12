@@ -466,13 +466,16 @@ const handleAddRecurring = async () => {
     return
   }
 
+  // ✅ Calculate the skip time dynamically
+  const nextSkip = await calculateNextSkipTime(formData.businessType)
+
   const newSchedule = {
     hour: parseInt(recurringHour),
     minute: parseInt(recurringMinute),
     recurring_days: selectedDays,
     created_at: new Date().toISOString(),
     record_limit: formData.limit,
-    skip_times: formData.skipTimes,
+    skip_times: nextSkip,
     add_to_campaign: formData.addtocampaign,
     city: formData.city,
     state: formData.state,
@@ -481,27 +484,26 @@ const handleAddRecurring = async () => {
     business_type: formData.businessType,
     business_status: formData.businessStatus,
   }
-  
-  try {
-    const { data, error } = await supabase.from("recurring_scrapes").insert([newSchedule])
 
+  try {
+    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
     if (error) {
-      console.error("❌ Error saving recurring schedule:", error)
-      alert("Error saving recurring schedule.")
+      console.error("❌ Error saving schedule:", error)
+      alert("Failed to save.")
       return
     }
 
-    alert("✅ Recurring scrape scheduled successfully!")
+    alert("✅ Recurring scrape scheduled!")
     setRecurringHour("")
     setRecurringMinute("")
     setSelectedDays([])
-
     fetchRecurringSchedules().then(setRecurringSchedules)
   } catch (err) {
     console.error("❌ Unexpected error:", err)
     alert("Unexpected error occurred.")
   }
 }
+
 
 // 🗑 DELETE
 async function handleDeleteRecurring(id: string) {
@@ -519,6 +521,23 @@ useEffect(() => {
 }, [])
 const [currentPage, setCurrentPage] = useState(1)
 const schedulesPerPage = 10
+
+const calculateNextSkipTime = async (businessType: string): Promise<number> => {
+  const { data, error } = await supabase
+    .from("recurring_scrapes")
+    .select("record_limit")
+    .eq("business_type", businessType)
+
+  if (error) {
+    console.error("❌ Error fetching scrapes:", error.message)
+    return 1
+  }
+
+  const totalLimit = data?.reduce((sum, r) => sum + (r.record_limit || 0), 0) || 0
+  const skipTime = Math.floor(totalLimit / 100) + 1
+  return skipTime
+}
+
 
   return (
     

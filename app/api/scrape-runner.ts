@@ -77,3 +77,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: "Scrape failed", error: err.message })
   }
 }
+
+export async function calculateNextSkipTime(businessType: string): Promise<number> {
+    const { data, error } = await supabase
+      .from("recurring_scrapes")
+      .select("record_limit")
+      .eq("business_type", businessType)
+  
+    if (error) {
+      console.error("❌ Error fetching existing scrapes:", error.message)
+      return 1
+    }
+  
+    const totalLimit = data?.reduce((sum, row) => sum + (row.record_limit || 0), 0) || 0
+    const skip = Math.floor(totalLimit / 100) + 1
+    return skip
+  }
+  
