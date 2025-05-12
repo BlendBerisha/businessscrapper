@@ -124,6 +124,50 @@ export function BusinessScraperForm() {
       return newData
     })
   }
+  const handleQueueScrape = async () => {
+    const newJob = {
+      created_at: new Date().toISOString(),
+      status: "pending",
+      record_limit: formData.limit,
+      skip_times: formData.skipTimes,
+      add_to_campaign: formData.addtocampaign,
+      city: formData.city,
+      state: formData.state,
+      country: formData.country,
+      postal_code: formData.postalCode,
+      business_type: formData.businessType,
+      business_status: formData.businessStatus,
+      from_date: formData.fromDate,
+      to_date: formData.toDate,
+      phone_filter: formData.phoneFilter,
+      phone_number: formData.phoneNumber,
+      verify_emails: formData.verifyEmails,
+      enrich_with_area_codes: formData.enrichWithAreaCodes,
+      json_file_name: formData.jsonFileName,
+      csv_file_name: formData.csvFileName,
+    }
+  
+    const { error } = await supabase.from("scrape_queue").insert([newJob])
+  
+    if (error) {
+      toast({
+        title: "Failed to add scrape job",
+        description: error.message,
+        variant: "destructive",
+      })
+      return
+    }
+  
+    toast({
+      title: "Scrape job queued",
+      description: "Now running scrape...",
+      variant: "default",
+    })
+  
+    // 🔁 Start scraping immediately
+    document.querySelector("form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+  }
+    
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault()
@@ -477,21 +521,38 @@ const [currentPage, setCurrentPage] = useState(1)
 const schedulesPerPage = 10
 
   return (
+    
     <Card className="shadow-lg border-0">
+      
       <CardHeader className="pb-4 border-b">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-xl font-semibold">Google My Business Scraper</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex items-center gap-1"
-          >
-            <Settings className="h-4 w-4" />
-            <span>Settings</span>
-          </Button>
-        </div>
-      </CardHeader>
+  <div className="flex justify-between items-center">
+    <CardTitle className="text-xl font-semibold">Google My Business Scraper</CardTitle>
+
+    {/* Group buttons on the right */}
+    <div className="flex items-center gap-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsSettingsOpen(true)}
+        className="flex items-center gap-1"
+      >
+        <Settings className="h-4 w-4" />
+        <span>Settings</span>
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={async () => {
+          await supabase.auth.signOut()
+          window.location.href = "/login"
+        }}
+      >
+        Logout
+      </Button>
+    </div>
+  </div>
+</CardHeader>
       <CardContent className="pt-6">
         <Tabs defaultValue="profiles" onValueChange={(value) => handleChange("scrapeType", value)}>
           <TabsList className="grid w-full grid-cols-2">
@@ -873,15 +934,15 @@ const schedulesPerPage = 10
 
                 {/* Submit Button */}
                 <Button
-  type={useRecurringSettings ? "button" : "submit"}
-  onClick={useRecurringSettings ? handleAddRecurring : undefined}
+  type="button"
+  onClick={useRecurringSettings ? handleAddRecurring : handleQueueScrape}
   disabled={isLoading}
   className="w-full"
 >
   {isLoading ? (
     <>
       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      {useRecurringSettings ? "Scheduling..." : "Processing..."}
+      {useRecurringSettings ? "Scheduling..." : "Adding to queue..."}
     </>
   ) : (
     useRecurringSettings ? "Start Timed Scraping" : "Start Scraping"
