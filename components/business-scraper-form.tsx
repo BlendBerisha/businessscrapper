@@ -977,9 +977,10 @@ const schedulesPerPage = 10
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {recurringSchedules
-              .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
-              .map((schedule) => (
+          {recurringSchedules
+  .filter((s) => s.source === "recurring" || !["completed", "failed", "no_results"].includes(s.status))
+  .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
+  .map((schedule) => (
                 <tr key={schedule.id}>
                   <td className="px-4 py-2">{schedule.date || "-"}</td>
                   <td className="px-4 py-2">
