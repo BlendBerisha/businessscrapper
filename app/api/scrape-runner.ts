@@ -49,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!data || data.length === 0) {
       // ❌ No results, remove job
       await supabase.from("scrape_queue").delete().eq("id", job.id)
-      return res.status(200).json({ message: "No results found." })
+      return res.status(200).json({ message: "No results found. Job removed." })
     }
 
     let verifiedData = data
@@ -58,19 +58,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       verifiedData = await verifyEmails(data, process.env.MILLION_VERIFIER_KEY)
     }
 
-    // Simulate saving files
+    // Simulate saving files (not used here but retained for logic completeness)
     const jsonBlob = JSON.stringify(verifiedData, null, 2)
     const csvBlob = convertJsonToCsv(verifiedData, job.csv_file_name)
 
-    // ✅ Mark as complete by deleting from the table
+    // ✅ Delete job when done
     await supabase.from("scrape_queue").delete().eq("id", job.id)
 
-    return res.status(200).json({ message: `Job ${job.id} completed.` })
+    return res.status(200).json({ message: `✅ Job ${job.id} completed and removed.` })
   } catch (err: any) {
     console.error("❌ Error in job:", err.message)
 
     if (job?.id) {
-      // ❌ On error, delete the job too (optional: log separately if needed)
+      // ❌ Delete failed job to avoid stuck entries
       await supabase.from("scrape_queue").delete().eq("id", job.id)
     }
 
