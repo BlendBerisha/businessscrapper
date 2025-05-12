@@ -466,8 +466,17 @@ const handleAddRecurring = async () => {
     return
   }
 
-  // ✅ Calculate the skip time dynamically
-  const nextSkip = await calculateNextSkipTime(formData.businessType)
+  // ✅ Fetch existing for same business_type, city, country
+  const { data: existing } = await supabase
+    .from("recurring_scrapes")
+    .select("record_limit")
+    .eq("business_type", formData.businessType)
+    .eq("city", formData.city)
+    .eq("country", formData.country)
+
+  const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
+
+  const newSkipTimes = Math.floor(totalLimit / formData.limit)
 
   const newSchedule = {
     hour: parseInt(recurringHour),
@@ -475,7 +484,7 @@ const handleAddRecurring = async () => {
     recurring_days: selectedDays,
     created_at: new Date().toISOString(),
     record_limit: formData.limit,
-    skip_times: nextSkip,
+    skip_times: newSkipTimes,
     add_to_campaign: formData.addtocampaign,
     city: formData.city,
     state: formData.state,
@@ -487,22 +496,25 @@ const handleAddRecurring = async () => {
 
   try {
     const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
+
     if (error) {
-      console.error("❌ Error saving schedule:", error)
-      alert("Failed to save.")
+      console.error("❌ Error saving recurring schedule:", error)
+      alert("Error saving recurring schedule.")
       return
     }
 
-    alert("✅ Recurring scrape scheduled!")
+    alert("✅ Recurring scrape scheduled successfully!")
     setRecurringHour("")
     setRecurringMinute("")
     setSelectedDays([])
+
     fetchRecurringSchedules().then(setRecurringSchedules)
   } catch (err) {
     console.error("❌ Unexpected error:", err)
     alert("Unexpected error occurred.")
   }
 }
+
 
 
 // 🗑 DELETE
