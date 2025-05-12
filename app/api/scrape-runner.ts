@@ -4,13 +4,13 @@ import { NextApiRequest, NextApiResponse } from "next"
 import { supabase } from "@/lib/supabase"
 import { fetchBusinessData } from "@/actions/targetron"
 import { verifyEmails } from "@/actions/million-verifier"
-import { convertJsonToCsv, downloadJsonAsFile } from "@/lib/utils"
+import { convertJsonToCsv } from "@/lib/utils"
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  let job: any = null // ✅ Declare job outside try for catch access
+  let job: any = null
 
   try {
-    // 1. Get first pending job
+    // 1. Fetch the first pending job
     const { data: jobs, error } = await supabase
       .from("scrape_queue")
       .select("*")
@@ -24,10 +24,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     job = jobs[0]
 
-    // 2. Mark as running
+    // 2. Mark job as "running"
     await supabase.from("scrape_queue").update({ status: "running" }).eq("id", job.id)
 
-    // 3. Run your scrape
+    // 3. Run the scraper
     const data = await fetchBusinessData({
       apiKey: process.env.TARGETRON_API_KEY!,
       country: job.country,
@@ -47,7 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })
 
     if (!data || data.length === 0) {
-      await supabase.from("scrape_queue").update({ status: "no_results" }).eq("id", job.id)
+      // ❌ No results, remove job
+      await supabase.from("scrape_queue").delete().eq("id", job.id)
       return res.status(200).json({ message: "No results found." })
     }
 
@@ -57,24 +58,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       verifiedData = await verifyEmails(data, process.env.MILLION_VERIFIER_KEY)
     }
 
-    // Simulate file saving (in-memory)
+    // Simulate saving files
     const jsonBlob = JSON.stringify(verifiedData, null, 2)
     const csvBlob = convertJsonToCsv(verifiedData, job.csv_file_name)
 
-    // 4. Mark as complete
-    await supabase
-      .from("scrape_queue")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", job.id)
+    // ✅ Mark as complete by deleting from the table
+    await supabase.from("scrape_queue").delete().eq("id", job.id)
 
     return res.status(200).json({ message: `Job ${job.id} completed.` })
   } catch (err: any) {
     console.error("❌ Error in job:", err.message)
+
     if (job?.id) {
-      await supabase
-        .from("scrape_queue")
-        .update({ status: "failed", error: err.message })
-        .eq("id", job.id)
+      // ❌ On error, delete the job too (optional: log separately if needed)
+      await supabase.from("scrape_queue").delete().eq("id", job.id)
     }
 
     return res.status(500).json({ message: "Scrape failed", error: err.message })
