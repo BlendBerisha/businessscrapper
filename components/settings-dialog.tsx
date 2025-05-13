@@ -102,7 +102,31 @@ export function SettingsDialog({ open, onOpenChange, formData, onFormDataChange 
             />
           </div>
         </Card>
+        <Card className="p-4 space-y-4">
+  <h3 className="text-sm font-medium flex items-center gap-2">
+    <MessageSquare className="h-4 w-4" /> Slack Notifications
+  </h3>
 
+  <div className="space-y-2">
+    <Label htmlFor="slackBotToken">Slack Bot Token</Label>
+    <PasswordInput
+      id="slackBotToken"
+      value={localSettings.slackBotToken || ""}
+      onChange={(e) => handleChange("slackBotToken", e.target.value)}
+      placeholder="Enter your Slack Bot token"
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label htmlFor="slackChannelId">Slack Channel ID</Label>
+    <Input
+      id="slackChannelId"
+      value={localSettings.slackChannelId || ""}
+      onChange={(e) => handleChange("slackChannelId", e.target.value)}
+      placeholder="Enter your Slack Channel ID"
+    />
+  </div>
+</Card>
         <Card className="p-4 space-y-4">
   <h3 className="text-sm font-medium flex items-center gap-2">
     <Link className="h-4 w-4" /> Instantly (Cold Email)
