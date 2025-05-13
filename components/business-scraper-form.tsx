@@ -216,11 +216,15 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
 
     // ✅ Filter data if 'without_phone' is selected
+    console.log("Raw data count:", data.length)
+
     const filteredData =
       formData.phoneFilter === "without_phone"
         ? data.filter((item) => !item.phone || item.phone.trim() === "")
         : data
-
+    
+    console.log("Filtered without-phone count:", filteredData.length)
+    
     toast({
       title: "Data fetched successfully",
       description: `Found ${filteredData.length} business records.`,
