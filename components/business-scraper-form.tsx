@@ -526,8 +526,9 @@ const handleAddRecurring = async () => {
         .eq("city", formData.city)
         .eq("state", formData.state)
         .eq("postal_code", formData.postalCode)
-        .eq("phone_filter", formData.phoneFilter)
-
+        .eq("with_phone", formData.phoneFilter === "with_phone" || formData.phoneFilter === "both" || formData.phoneFilter === "enter_phone")
+        .eq("without_phone", formData.phoneFilter === "without_phone" || formData.phoneFilter === "both")
+        
       if (!conflicts || conflicts.length === 0) {
         foundFreeSlot = true
         break
@@ -581,8 +582,12 @@ const handleAddRecurring = async () => {
       postal_code: formData.postalCode,
       business_type: formData.businessType,
       business_status: formData.businessStatus,
-      phone_filter: formData.phoneFilter,
-    }
+      with_phone:
+      formData.phoneFilter === "with_phone" ||
+      formData.phoneFilter === "enter_phone",
+    without_phone:
+      formData.phoneFilter === "without_phone"
+        }
 
     const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
     if (error) {
