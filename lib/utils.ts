@@ -73,10 +73,10 @@ export function convertJsonToCsv(jsonData: any[], filename: string) {
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
 
   // ✅ Prevent empty workbook crash
-  if (withEmails.length === 0 && withoutEmails.length === 0) {
-    console.warn("📭 No data to write into workbook. Skipping file generation.")
-    return
-  }
+  // if (withEmails.length === 0 && withoutEmails.length === 0) {
+  //   console.warn("📭 No data to write into workbook. Skipping file generation.")
+  //   return
+  // }
 
   const workbook = XLSX.utils.book_new()
 
