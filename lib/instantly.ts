@@ -48,28 +48,20 @@ export class InstantlyAPI {
 
   private cleanData(data: Record<string, any>): Record<string, any> {
     const cleaned: Record<string, any> = {}
-
     for (const [key, value] of Object.entries(data)) {
-      if (
-        value === undefined ||
-        value === null ||
-        value === "" ||
-        (typeof value === "number" && !isFinite(value))
-      ) {
-        continue // Skip empty, null, undefined, or NaN values
-      }
-
       if (
         typeof value === "string" ||
         typeof value === "number" ||
-        typeof value === "boolean"
+        typeof value === "boolean" ||
+        value === null
       ) {
         cleaned[key] = value
+      } else if (value === undefined) {
+        cleaned[key] = null
       } else {
         cleaned[key] = JSON.stringify(value)
       }
     }
-
     return cleaned
   }
 
