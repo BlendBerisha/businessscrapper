@@ -136,94 +136,51 @@ export class InstantlyAPI {
   async addLeadsFromData(data: any[]): Promise<{ success: string[]; failed: string[] }> {
     const successful: string[] = []
     const failed: string[] = []
-
-    console.log(`📥 Starting upload of ${data.length} leads to Instantly`)
-
-    for (const item of data) {
-      const email = item.email
-      if (!this.isValidEmail(email)) {
-        console.warn("❌ Invalid or missing email:", email)
-        continue
+    const seenEmails = new Set<string>()
+  
+    const emailGroups = [
+      ["email", "email_title", "email_first_name", "email_last_name"],
+      ["email_1", "email_1_title", "email_1_first_name", "email_1_last_name"],
+      ["email_2", "email_2_title", "email_2_first_name", "email_2_last_name"],
+      ["email_3", "email_3_title", "email_3_first_name", "email_3_last_name"],
+    ]
+  
+    console.log(`📥 Preparing upload of leads to Instantly...`)
+  
+    for (const row of data) {
+      for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
+        const email = row[emailKey]?.trim()
+        if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
+  
+        seenEmails.add(email)
+  
+        const lead = {
+          email,
+          first_name: row[firstNameKey] || "Unknown",
+          last_name: row[lastNameKey] || "Unknown",
+          company_name: row.display_name || "N/A",
+          website: row.site || "N/A",
+          phone: row.phone || "N/A",
+          personalization: `Hello ${row[firstNameKey] || "there"}, I wanted to connect.`,
+          extra_fields: row,
+          custom_variables: {
+            email_title: row[titleKey] || "",
+            email_first_name: row[firstNameKey] || "",
+            email_last_name: row[lastNameKey] || "",
+            is_email_valid: row.is_email_valid || false,
+          },
+        }
+  
+        const success = await this.addLead(lead)
+        if (success) successful.push(email)
+        else failed.push(email)
       }
-
-      const success = await this.addLead({
-        email,
-        company_name: item.display_name || "N/A",
-        phone: item.phone || "N/A",
-        website: item.site || "N/A",
-        personalization: `Hello ${item.email_first_name || "there"}, I wanted to connect.`,
-        first_name: item.email_first_name || "Unknown",
-        last_name: item.email_last_name || "Unknown",
-        extra_fields: {
-          types: item.types,
-          type: item.type,
-          country_code: item.country_code,
-          state: item.state,
-          city: item.city,
-          county: item.county,
-          street: item.street,
-          postal_code: item.postal_code,
-          "enrich area codes": item["enrich area codes"],
-          address: item.address,
-          latitude: item.latitude,
-          longitude: item.longitude,
-          phone: item.phone,
-          phone_type: item.phone_type,
-          linkedin: item.linkedin,
-          facebook: item.facebook,
-          twitter: item.twitter,
-          instagram: item.instagram,
-          tiktok: item.tiktok,
-          whatsapp: item.whatsapp,
-          youtube: item.youtube,
-          site: item.site,
-          site_generator: item.site_generator,
-          photo: item.photo,
-          photos_count: item.photos_count,
-          rating: item.rating,
-          rating_history: item.rating_history,
-          reviews: item.reviews,
-          reviews_link: item.reviews_link,
-          range: item.range,
-          business_status: item.business_status,
-          business_status_history: item.business_status_history,
-          booking_appointment_link: item.booking_appointment_link,
-          menu_link: item.menu_link,
-          verified: item.verified,
-          owner_title: item.owner_title,
-          located_in: item.located_in,
-          os_id: item.os_id,
-          google_id: item.google_id,
-          place_id: item.place_id,
-          cid: item.cid,
-          gmb_link: item.gmb_link,
-          located_os_id: item.located_os_id,
-          working_hours: item.working_hours,
-          area_service: item.area_service,
-          about: item.about,
-          corp_name: item.corp_name,
-          corp_employees: item.corp_employees,
-          corp_revenue: item.corp_revenue,
-          corp_founded_year: item.corp_founded_year,
-          corp_is_public: item.corp_is_public,
-          added_at: item.added_at,
-          updated_at: item.updated_at,
-        },
-        custom_variables: {
-          email_title: item.email_title,
-          email_first_name: item.email_first_name,
-          email_last_name: item.email_last_name,
-          is_email_valid: item.is_email_valid,
-        },
-      })
-
-      if (success) successful.push(email)
-      else failed.push(email)
     }
-
+  
     console.log(`✅ Successfully uploaded: ${successful.length}`)
     console.log(`❌ Failed uploads: ${failed.length}`)
-
+  
     return { success: successful, failed }
   }
+  
 }
