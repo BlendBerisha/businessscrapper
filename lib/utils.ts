@@ -85,13 +85,19 @@ export function convertJsonToCsv(jsonData: any[], filename: string) {
     applyFormatting(sheet, columnOrder)
     XLSX.utils.book_append_sheet(workbook, sheet, "With Emails")
   }
-
+  
   if (withoutEmails.length > 0) {
     const sheet = createWorksheet(withoutEmails, columnOrder)
     applyFormatting(sheet, columnOrder)
     XLSX.utils.book_append_sheet(workbook, sheet, "No Emails")
   }
-
+  
+  // 🛡️ Fallback: Add placeholder sheet if no data
+  if (withEmails.length === 0 && withoutEmails.length === 0) {
+    const emptySheet = XLSX.utils.aoa_to_sheet([["No data available"]])
+    XLSX.utils.book_append_sheet(workbook, emptySheet, "No Data")
+  }
+  
   const excelFilename = filename.endsWith(".xlsx")
     ? filename
     : filename.endsWith(".csv")
