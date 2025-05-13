@@ -1038,12 +1038,15 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
         <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
         <td className="px-4 py-2">{schedule.skip_times ?? "-"}</td> {/* 👈 show skip_times */}
         <td className="px-4 py-2">
-          <button
-            onClick={() => handleDeleteRecurring(schedule.id)}
-            className="text-red-600 hover:text-red-800"
-          >
-            ❌
-          </button>
+        <Button
+  variant="destructive"
+  size="sm"
+  onClick={() => handleDeleteRecurring(schedule.id)}
+  className="px-2 py-1"
+>
+   Delete
+</Button>
+
         </td>
       </tr>
     ))}
