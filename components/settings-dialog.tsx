@@ -24,6 +24,13 @@ import {
   DollarSign,
   CreditCard,
 } from "lucide-react"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 
 interface SettingsDialogProps {
   open: boolean
@@ -98,74 +105,117 @@ export function SettingsDialog({ open, onOpenChange, formData, onFormDataChange 
 
         <Card className="p-4 space-y-4">
   <h3 className="text-sm font-medium flex items-center gap-2">
-    <MessageSquare className="h-4 w-4" /> Slack Notifications
+    <Link className="h-4 w-4" /> Instantly (Cold Email)
   </h3>
 
-  <div className="space-y-2">
-    <Label htmlFor="slackBotToken">Slack Bot Token</Label>
-    <PasswordInput
-      id="slackBotToken"
-      value={localSettings.slackBotToken || ""}
-      onChange={(e) => handleChange("slackBotToken", e.target.value)}
-      placeholder="Enter your Slack Bot token"
+  <div className="flex items-center justify-between">
+    <Label htmlFor="connectColdEmail">Connect Instantly</Label>
+    <Switch
+      id="connectColdEmail"
+      checked={localSettings.connectColdEmail}
+      onCheckedChange={(checked) => handleChange("connectColdEmail", checked)}
     />
   </div>
 
-  <div className="space-y-2">
-    <Label htmlFor="slackChannelId">Slack Channel ID</Label>
-    <Input
-      id="slackChannelId"
-      value={localSettings.slackChannelId || ""}
-      onChange={(e) => handleChange("slackChannelId", e.target.value)}
-      placeholder="Enter your Slack Channel ID"
-    />
-  </div>
+  {localSettings.connectColdEmail && (
+    <div className="grid grid-cols-1 gap-4">
+      <div className="space-y-2">
+        <Label htmlFor="instantlyApiKey">Instantly API Key</Label>
+        <PasswordInput
+          id="instantlyApiKey"
+          value={localSettings.instantlyApiKey || ""}
+          onChange={(e) => handleChange("instantlyApiKey", e.target.value)}
+          placeholder="Enter your Instantly API key"
+        />
+      </div>
+
+      {/* Profile input */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="instantlyProfileName">Profile Name</Label>
+          <Input
+            id="instantlyProfileName"
+            value={localSettings.tempInstantlyProfileName || ""}
+            onChange={(e) => handleChange("tempInstantlyProfileName", e.target.value)}
+            placeholder="e.g. blendi list"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="instantlyListId">List ID</Label>
+          <Input
+            id="instantlyListId"
+            value={localSettings.tempInstantlyListId || ""}
+            onChange={(e) => handleChange("tempInstantlyListId", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="instantlyCampaignId">Campaign ID</Label>
+          <Input
+            id="instantlyCampaignId"
+            value={localSettings.tempInstantlyCampaignId || ""}
+            onChange={(e) => handleChange("tempInstantlyCampaignId", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          const newProfile = {
+            name: localSettings.tempInstantlyProfileName,
+            listId: localSettings.tempInstantlyListId,
+            campaignId: localSettings.tempInstantlyCampaignId,
+          }
+
+          if (!newProfile.name || !newProfile.listId || !newProfile.campaignId) {
+            alert("Please fill all fields to save a profile.")
+            return
+          }
+
+          const updatedProfiles = [
+            ...(localSettings.instantlyProfiles || []),
+            newProfile,
+          ]
+
+          handleChange("instantlyProfiles", updatedProfiles)
+          handleChange("tempInstantlyProfileName", "")
+          handleChange("tempInstantlyListId", "")
+          handleChange("tempInstantlyCampaignId", "")
+        }}
+      >
+        Save Profile
+      </Button>
+
+      {localSettings.instantlyProfiles?.length > 0 && (
+        <div className="space-y-2">
+          <Label>Select Profile to Use</Label>
+          <Select
+            onValueChange={(value) => {
+              const selected = localSettings.instantlyProfiles.find((p) => p.name === value)
+              if (selected) {
+                handleChange("instantlyListId", selected.listId)
+                handleChange("instantlyCampaignId", selected.campaignId)
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a saved Instantly profile" />
+            </SelectTrigger>
+            <SelectContent>
+              {localSettings.instantlyProfiles.map((p, index) => (
+                <SelectItem key={index} value={p.name}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
+  )}
 </Card>
 
-        <Card className="p-4 space-y-4">
-          <h3 className="text-sm font-medium flex items-center gap-2">
-            <Link className="h-4 w-4" /> Instantly (Cold Email)
-          </h3>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="connectColdEmail">Connect Instantly</Label>
-            <Switch
-              id="connectColdEmail"
-              checked={localSettings.connectColdEmail}
-              onCheckedChange={(checked) => handleChange("connectColdEmail", checked)}
-            />
-          </div>
-          {localSettings.connectColdEmail && (
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="instantlyApiKey">Instantly API Key</Label>
-                <PasswordInput
-                  id="instantlyApiKey"
-                  value={localSettings.instantlyApiKey || ""}
-                  onChange={(e) => handleChange("instantlyApiKey", e.target.value)}
-                  placeholder="Enter your Instantly API key"
-                />
-              </div>
-              {/* <div className="space-y-2">
-                <Label htmlFor="instantlyListId">Instantly List ID</Label>
-                <Input
-                  id="instantlyListId"
-                  value={localSettings.instantlyListId || ""}
-                  onChange={(e) => handleChange("instantlyListId", e.target.value)}
-                  placeholder="Enter your Instantly List ID"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="instantlyCampaignId">Instantly Campaign ID</Label>
-                <Input
-                  id="instantlyCampaignId"
-                  value={localSettings.instantlyCampaignId || ""}
-                  onChange={(e) => handleChange("instantlyCampaignId", e.target.value)}
-                  placeholder="Enter your Instantly Campaign ID"
-                />
-              </div> */}
-            </div>
-          )}
-        </Card>
 
         <Card className="p-4 space-y-4">
           <h3 className="text-sm font-medium flex items-center gap-2">

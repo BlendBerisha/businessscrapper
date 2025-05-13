@@ -44,7 +44,6 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
 // Default form data without date-specific values
 const defaultFormData = {
-  // API Keys and IDs
   targetronApiKey: "",
   telegramBotToken: "",
   telegramChatId: "",
@@ -53,7 +52,17 @@ const defaultFormData = {
   instantlyListId: "",
   instantlyCampaignId: "",
 
-  // Scraping Parameters
+  // ✅ Add these for profiles
+  instProfileId: "",
+  instantlyProfiles: [] as {
+    name: string
+    listId: string
+    campaignId: string
+  }[],
+  tempInstantlyProfileName: "",
+  tempInstantlyListId: "",
+  tempInstantlyCampaignId: "",
+
   scrapeType: "profiles",
   fromDate: "",
   toDate: "",
@@ -66,18 +75,15 @@ const defaultFormData = {
   limit: 10,
   skipTimes: 1,
 
-  // Phone and Email Options
-  phoneFilter: "with_phone", // "with_phone", "without_phone", "both", or "enter_phone"
-  phoneNumber: "",     // optional input for "enter_phone" filter
+  phoneFilter: "with_phone",
+  phoneNumber: "",
   verifyEmails: true,
   enrichWithAreaCodes: false,
 
-  // Output Options
   jsonFileName: "business_data.json",
   csvFileName: "business_data.csv",
   addtocampaign: false,
 
-  // Additional Settings
   connectColdEmail: false,
   connectEmailVerification: true,
 }
@@ -913,44 +919,51 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
 
                 {/* Campaign Option - Fixed to prevent event propagation issues */}
                 <div className="border rounded-md p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="addtocampaign"
-                      checked={formData.addtocampaign}
-                      onCheckedChange={(checked) => {
-                        if (typeof checked === "boolean") {
-                          handleChange("addtocampaign", checked)
-                        }
-                      }}
-                    />
-                    <Label htmlFor="addtocampaign" className="cursor-pointer flex items-center gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add to Instantly campaign
-                    </Label>
-                  </div>
-                </div>
-                {formData.addtocampaign && (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-    <div className="space-y-2">
-      <Label htmlFor="instantlyListId">Instantly List ID</Label>
-      <Input
-        id="instantlyListId"
-        value={formData.instantlyListId}
-        onChange={(e) => handleChange("instantlyListId", e.target.value)}
-        placeholder="Enter your Instantly List ID"
-      />
-    </div>
-    <div className="space-y-2">
-      <Label htmlFor="instantlyCampaignId">Instantly Campaign ID</Label>
-      <Input
-        id="instantlyCampaignId"
-        value={formData.instantlyCampaignId}
-        onChange={(e) => handleChange("instantlyCampaignId", e.target.value)}
-        placeholder="Enter your Instantly Campaign ID"
-      />
-    </div>
+  <div className="flex items-center space-x-2">
+    <Checkbox
+      id="addtocampaign"
+      checked={formData.addtocampaign}
+      onCheckedChange={(checked) => {
+        if (typeof checked === "boolean") {
+          handleChange("addtocampaign", checked)
+        }
+      }}
+    />
+    <Label htmlFor="addtocampaign" className="cursor-pointer flex items-center gap-2">
+      <Plus className="h-4 w-4" />
+      Add to Instantly campaign
+    </Label>
   </div>
-)}
+
+  {formData.addtocampaign && (
+    <div className="mt-4">
+      <Label htmlFor="instantlyProfile">Select Instantly Profile</Label>
+      <Select
+        value={formData.instProfileId || ""}
+        onValueChange={(value) => {
+          const selected = formData.instantlyProfiles?.find((p) => p.name === value)
+          if (selected) {
+            handleChange("instantlyListId", selected.listId)
+            handleChange("instantlyCampaignId", selected.campaignId)
+            handleChange("instProfileId", value)
+          }
+        }}
+      >
+        <SelectTrigger id="instantlyProfile">
+          <SelectValue placeholder="Choose a saved Instantly profile" />
+        </SelectTrigger>
+        <SelectContent>
+          {(formData.instantlyProfiles || []).map((profile) => (
+            <SelectItem key={profile.name} value={profile.name}>
+              {profile.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )}
+</div>
+
 
                 <div className="bg-gray-50 p-4 rounded-md space-y-4">
   <div className="flex items-center space-x-2">
