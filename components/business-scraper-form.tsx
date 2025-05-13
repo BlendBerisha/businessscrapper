@@ -67,7 +67,7 @@ const defaultFormData = {
   skipTimes: 1,
 
   // Phone and Email Options
-  phoneFilter: "both", // "with_phone", "without_phone", "both", or "enter_phone"
+  phoneFilter: "with_phone", // "with_phone", "without_phone", "both", or "enter_phone"
   phoneNumber: "",     // optional input for "enter_phone" filter
   verifyEmails: true,
   enrichWithAreaCodes: false,
@@ -195,11 +195,9 @@ const handleSubmit = async (e: React.FormEvent) => {
       addedTo: formData.toDate,
       withPhone:
         formData.phoneFilter === "with_phone" ||
-        formData.phoneFilter === "both" ||
         formData.phoneFilter === "enter_phone",
       withoutPhone:
-        formData.phoneFilter === "without_phone" ||
-        formData.phoneFilter === "both",
+        formData.phoneFilter === "without_phone",
       enrichWithAreaCodes: formData.enrichWithAreaCodes,
       phoneNumber:
         formData.phoneFilter === "enter_phone" ? formData.phoneNumber : undefined,
