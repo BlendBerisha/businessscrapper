@@ -43,9 +43,10 @@ export class InstantlyAPI {
   }
 
   private isValidEmail(email: any): boolean {
-    return typeof email === "string" && email.includes("@")
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return typeof email === "string" && emailRegex.test(email)
   }
-
+  
   private cleanData(data: Record<string, any>): Record<string, any> {
     const cleaned: Record<string, any> = {}
 
@@ -139,48 +140,52 @@ export class InstantlyAPI {
     const seenEmails = new Set<string>()
   
     const emailGroups = [
-      ["email", "email_title", "email_first_name", "email_last_name"],
       ["email_1", "email_1_title", "email_1_first_name", "email_1_last_name"],
       ["email_2", "email_2_title", "email_2_first_name", "email_2_last_name"],
       ["email_3", "email_3_title", "email_3_first_name", "email_3_last_name"],
     ]
   
-    console.log(`📥 Preparing upload of leads to Instantly...`)
+    console.log(`📥 Uploading multiple emails per row. Total records: ${data.length}`)
   
-    for (const row of data) {
+    for (const item of data) {
       for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
-        const email = row[emailKey]?.trim()
-        if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
+        const email = item[emailKey]?.trim()
+  
+        if (!email || !this.isValidEmail(email) || seenEmails.has(email)) {
+          continue
+        }
   
         seenEmails.add(email)
   
-        const lead = {
+        const success = await this.addLead({
           email,
-          first_name: row[firstNameKey] || "Unknown",
-          last_name: row[lastNameKey] || "Unknown",
-          company_name: row.display_name || "N/A",
-          website: row.site || "N/A",
-          phone: row.phone || "N/A",
-          personalization: `Hello ${row[firstNameKey] || "there"}, I wanted to connect.`,
-          extra_fields: row,
-          custom_variables: {
-            email_title: row[titleKey] || "",
-            email_first_name: row[firstNameKey] || "",
-            email_last_name: row[lastNameKey] || "",
-            is_email_valid: row.is_email_valid || false,
+          company_name: item.display_name || "N/A",
+          phone: item.phone || "N/A",
+          website: item.site || "N/A",
+          personalization: `Hello ${item[firstNameKey] || "there"}, I wanted to connect.`,
+          first_name: item[firstNameKey] || "Unknown",
+          last_name: item[lastNameKey] || "Unknown",
+          extra_fields: {
+            ...item,
           },
-        }
+          custom_variables: {
+            email_title: item[titleKey] || "",
+            email_first_name: item[firstNameKey] || "",
+            email_last_name: item[lastNameKey] || "",
+            is_email_valid: item.is_email_valid,
+          },
+        })
   
-        const success = await this.addLead(lead)
-        if (success) successful.push(email)
-        else failed.push(email)
+        if (success) {
+          successful.push(email)
+        } else {
+          failed.push(email)
+        }
       }
     }
   
-    console.log(`✅ Successfully uploaded: ${successful.length}`)
-    console.log(`❌ Failed uploads: ${failed.length}`)
-  
+    console.log(`✅ Uploaded: ${successful.length}, ❌ Failed: ${failed.length}`)
     return { success: successful, failed }
   }
-  
+    
 }
