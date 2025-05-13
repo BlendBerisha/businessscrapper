@@ -799,7 +799,7 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                   <Input
   id="limit"
   type="number"
-  value={useRecurringSettings ? 100 : formData.limit ?? ""}
+  value={useRecurringSettings ? 1 : formData.limit ?? ""}
   onChange={(e) => {
     const val = e.target.value
     if (!useRecurringSettings) {
