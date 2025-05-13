@@ -456,32 +456,37 @@ const [recurringMinute, setRecurringMinute] = useState("")
 const [selectedDays, setSelectedDays] = useState<string[]>([])
 const [recurringSchedules, setRecurringSchedules] = useState<any[]>([])
 const [useRecurringSettings, setUseRecurringSettings] = useState(false)
+const [sortOrder, setSortOrder] = useState<"new" | "old">("new")
+const [typeFilter, setTypeFilter] = useState<"all" | "recurring" | "one-time">("all")
 
 // ✅ ADD RECURRING SCHEDULE
 const handleAddRecurring = async () => {
-  if (!useRecurringSettings) return
+  if (!useRecurringSettings) return;
 
   if (!recurringHour || !recurringMinute || selectedDays.length === 0) {
-    alert("Please specify hour, minute, and at least one weekday.")
-    return
+    alert("Please specify hour, minute, and at least one weekday.");
+    return;
   }
 
-  // ✅ Force limit to 100 when recurring is enabled
-  const forcedLimit = 100
+  const forcedLimit = 100;
 
-  // 🔍 Get existing entries for the same business_type + city + country
+  // 🔍 Build a unique filter across all relevant fields
   const { data: existing } = await supabase
     .from("recurring_scrapes")
     .select("record_limit")
     .eq("business_type", formData.businessType)
-    .eq("city", formData.city)
+    .eq("business_status", formData.businessStatus)
     .eq("country", formData.country)
+    .eq("city", formData.city)
+    .eq("state", formData.state)
+    .eq("postal_code", formData.postalCode)
+    .eq("phone_filter", formData.phoneFilter);
 
-  // 🧮 Sum all previous limits for matching records
-  const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
+  // 🧮 Calculate total existing records
+  const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0);
 
-  // ✅ Skip time = floor(totalLimit / 100) + 1
-  const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1
+  // 🔁 Calculate new skip time
+  const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1;
 
   const newSchedule = {
     hour: parseInt(recurringHour),
@@ -497,28 +502,30 @@ const handleAddRecurring = async () => {
     postal_code: formData.postalCode,
     business_type: formData.businessType,
     business_status: formData.businessStatus,
-  }
+    phone_filter: formData.phoneFilter,
+  };
 
   try {
-    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
+    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule]);
 
     if (error) {
-      console.error("❌ Error saving recurring schedule:", error)
-      alert("Error saving recurring schedule.")
-      return
+      console.error("❌ Error saving recurring schedule:", error);
+      alert("Error saving recurring schedule.");
+      return;
     }
 
-    alert("✅ Recurring scrape scheduled successfully!")
-    setRecurringHour("")
-    setRecurringMinute("")
-    setSelectedDays([])
+    alert("✅ Recurring scrape scheduled successfully!");
+    setRecurringHour("");
+    setRecurringMinute("");
+    setSelectedDays([]);
 
-    fetchRecurringSchedules().then(setRecurringSchedules)
+    fetchRecurringSchedules().then(setRecurringSchedules);
   } catch (err) {
-    console.error("❌ Unexpected error:", err)
-    alert("Unexpected error occurred.")
+    console.error("❌ Unexpected error:", err);
+    alert("Unexpected error occurred.");
   }
-}
+};
+
 
 
 
@@ -996,61 +1003,99 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
           <TabsContent value="recurring">
   <div className="space-y-4">
     <h3 className="text-lg font-medium">Scheduled Scrapes</h3>
+
+    {/* Filters */}
+    <div className="flex items-center justify-between px-2">
+      <div className="flex gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Sort:</label>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as "new" | "old")}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="new">Newest First</option>
+            <option value="old">Oldest First</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">Show:</label>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as "all" | "recurring" | "one-time")}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="all">All</option>
+            <option value="recurring">Recurring Only</option>
+            <option value="one-time">One-Time Only</option>
+          </select>
+        </div>
+      </div>
+    </div>
   </div>
 
   {recurringSchedules.length === 0 ? (
-    <p className="text-sm text-muted-foreground">No schedules found.</p>
+    <p className="text-sm text-muted-foreground px-4">No schedules found.</p>
   ) : (
     <>
-      <div className="overflow-auto border rounded-md">
+      <div className="overflow-auto border rounded-md mt-4">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
-  <tr>
-    <th className="px-4 py-2 text-left font-medium">Date</th>
-    <th className="px-4 py-2 text-left font-medium">Time</th>
-    <th className="px-4 py-2 text-left font-medium">Recurring Days</th>
-    <th className="px-4 py-2 text-left font-medium">City</th>
-    <th className="px-4 py-2 text-left font-medium">Type</th>
-    <th className="px-4 py-2 text-left font-medium">Limit</th>
-    <th className="px-4 py-2 text-left font-medium">Skip Times</th> {/* 👈 new column */}
-    <th className="px-4 py-2 text-left font-medium">Actions</th>
-  </tr>
-</thead>
-<tbody className="divide-y divide-gray-100">
-  {recurringSchedules
-    .filter((s) => s.source === "recurring" || !["completed", "failed", "no_results"].includes(s.status))
-    .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
-    .map((schedule) => (
-      <tr key={schedule.id}>
-        <td className="px-4 py-2">{schedule.date || "-"}</td>
-        <td className="px-4 py-2">
-          {schedule.hour !== null && schedule.minute !== null
-            ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`
-            : "-"}
-        </td>
-        <td className="px-4 py-2">
-          {schedule.recurring_days?.length > 0
-            ? schedule.recurring_days.join(", ")
-            : "-"}
-        </td>
-        <td className="px-4 py-2">{schedule.city || "-"}</td>
-        <td className="px-4 py-2">{schedule.business_type || "-"}</td>
-        <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
-        <td className="px-4 py-2">{schedule.skip_times ?? "-"}</td> {/* 👈 show skip_times */}
-        <td className="px-4 py-2">
-        <Button
-  variant="destructive"
-  size="sm"
-  onClick={() => handleDeleteRecurring(schedule.id)}
-  className="px-2 py-1"
->
-   Delete
-</Button>
-
-        </td>
-      </tr>
-    ))}
-</tbody>
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2 text-left font-medium">Date</th>
+              <th className="px-4 py-2 text-left font-medium">Time</th>
+              <th className="px-4 py-2 text-left font-medium">Recurring Days</th>
+              <th className="px-4 py-2 text-left font-medium">City</th>
+              <th className="px-4 py-2 text-left font-medium">Type</th>
+              <th className="px-4 py-2 text-left font-medium">Limit</th>
+              <th className="px-4 py-2 text-left font-medium">Skip Times</th>
+              <th className="px-4 py-2 text-left font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {recurringSchedules
+              .filter((s) => {
+                if (typeFilter === "recurring") return s.source === "recurring"
+                if (typeFilter === "one-time") return s.source === "queued"
+                return true
+              })
+              .sort((a, b) => {
+                const dateA = new Date(a.created_at || a.date || "").getTime()
+                const dateB = new Date(b.created_at || b.date || "").getTime()
+                return sortOrder === "new" ? dateB - dateA : dateA - dateB
+              })
+              .slice((currentPage - 1) * schedulesPerPage, currentPage * schedulesPerPage)
+              .map((schedule) => (
+                <tr key={schedule.id}>
+                  <td className="px-4 py-2">{schedule.date || "-"}</td>
+                  <td className="px-4 py-2">
+                    {schedule.hour !== null && schedule.minute !== null
+                      ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`
+                      : "-"}
+                  </td>
+                  <td className="px-4 py-2">
+                    {schedule.recurring_days?.length > 0
+                      ? schedule.recurring_days.join(", ")
+                      : "-"}
+                  </td>
+                  <td className="px-4 py-2">{schedule.city || "-"}</td>
+                  <td className="px-4 py-2">{schedule.business_type || "-"}</td>
+                  <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
+                  <td className="px-4 py-2">{schedule.skip_times ?? "-"}</td>
+                  <td className="px-4 py-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteRecurring(schedule.id)}
+                      className="px-2 py-1"
+                    >
+                      Delete
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
         </table>
       </div>
 
