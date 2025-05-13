@@ -284,8 +284,16 @@ const handleSubmit = async (e: React.FormEvent) => {
     
           // ✅ fallback to exporting filteredData
           downloadJsonAsFile(filteredData, `unverified_${formData.jsonFileName}`)
-          convertJsonToCsv(filteredData, `unverified_${formData.csvFileName}`)
-        }
+          if (filteredData.length > 0) {
+            convertJsonToCsv(filteredData, `unverified_${formData.csvFileName}`)
+          } else {
+            toast({
+              title: "CSV skipped",
+              description: "No records available to create a CSV.",
+              variant: "default",
+            })
+          }
+                  }
       } else {
         toast({
           title: "Email verification skipped",
