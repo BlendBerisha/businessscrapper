@@ -244,43 +244,57 @@ const handleSubmit = async (e: React.FormEvent) => {
     })
 
     let verifiedData = filteredData
+
     if (
       formData.verifyEmails &&
       formData.connectEmailVerification &&
       formData.millionApiKey
     ) {
-      try {
+      const hasEmailsToVerify = filteredData.some((item) =>
+        item.email || item.email_1 || item.email_2 || item.email_3
+      )
+    
+      if (hasEmailsToVerify) {
+        try {
+          toast({
+            title: "Verifying emails",
+            description: "Processing email verification...",
+          })
+    
+          verifiedData = await verifyEmails(filteredData, formData.millionApiKey)
+          console.log("📧 Verified data:", verifiedData)
+    
+          setBusinessData(verifiedData)
+    
+          downloadJsonAsFile(verifiedData, `verified_${formData.jsonFileName}`)
+          convertJsonToCsv(verifiedData, `verified_${formData.csvFileName}`)
+    
+          toast({
+            title: "Emails verified",
+            description: "Verification completed. Files saved.",
+            variant: "success",
+          })
+        } catch (error) {
+          console.error("Error verifying emails:", error)
+          toast({
+            title: "Email verification error",
+            description: "Failed to verify emails. Check your Million API key.",
+            variant: "destructive",
+          })
+    
+          // ✅ fallback to exporting filteredData
+          downloadJsonAsFile(filteredData, `unverified_${formData.jsonFileName}`)
+          convertJsonToCsv(filteredData, `unverified_${formData.csvFileName}`)
+        }
+      } else {
         toast({
-          title: "Verifying emails",
-          description: "Processing email verification...",
+          title: "Email verification skipped",
+          description: "No emails found to verify.",
+          variant: "default",
         })
-
-        verifiedData = await verifyEmails(filteredData, formData.millionApiKey)
-        console.log("📧 Verified data:", verifiedData)
-
-        setBusinessData(verifiedData)
-
-        downloadJsonAsFile(
-          verifiedData,
-          `verified_${formData.jsonFileName}`
-        )
-        convertJsonToCsv(
-          verifiedData,
-          `verified_${formData.csvFileName}`
-        )
-
-        toast({
-          title: "Emails verified",
-          description: "Email verification completed successfully. Updated files saved.",
-          variant: "success",
-        })
-      } catch (error) {
-        console.error("Error verifying emails:", error)
-        toast({
-          title: "Email verification error",
-          description: "Failed to verify emails. Check your Million API key.",
-          variant: "destructive",
-        })
+    
+        downloadJsonAsFile(filteredData, `no_emails_${formData.jsonFileName}`)
+        convertJsonToCsv(filteredData, `no_emails_${formData.csvFileName}`)
       }
     } else if (formData.verifyEmails && formData.connectEmailVerification) {
       toast({
@@ -288,7 +302,11 @@ const handleSubmit = async (e: React.FormEvent) => {
         description: "Million API key is not configured. Please add it in Settings.",
         variant: "destructive",
       })
+    
+      downloadJsonAsFile(filteredData, formData.jsonFileName)
+      convertJsonToCsv(filteredData, formData.csvFileName)
     }
+    
 
     if (formData.telegramBotToken && formData.telegramChatId) {
       toast({
