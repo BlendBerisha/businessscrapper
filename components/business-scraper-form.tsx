@@ -336,8 +336,8 @@ if (filteredData.length > 0) {
           variant: "default",
         })
     
-        downloadJsonAsFile(filteredData, `no_emails_${formData.jsonFileName}`)
-        convertJsonToCsv(filteredData, `no_emails_${formData.csvFileName}`)
+        downloadJsonAsFile(filteredData, formData.jsonFileName)
+        convertJsonToCsv(filteredData, formData.csvFileName)
       }
     } else if (formData.verifyEmails && formData.connectEmailVerification) {
       toast({
