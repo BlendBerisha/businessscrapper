@@ -124,32 +124,7 @@ export function BusinessScraperForm() {
       return newData
     })
   }
-  const handleQueueScrape = async () => {
-    console.log("🟢 Start Scraping Clicked!");
-    console.log("📦 formData:", formData);
-    console.log("📆 From Date:", formData.fromDate);
-    console.log("📆 To Date:", formData.toDate);
-    console.log("🌍 Country:", formData.country);
-    console.log("🏙️ City:", formData.city);
-    console.log("🏞️ State:", formData.state);
-    console.log("📮 Postal Code:", formData.postalCode);
-    console.log("🏢 Business Type:", formData.businessType);
-    console.log("📊 Business Status:", formData.businessStatus);
-    console.log("📈 Limit:", formData.limit);
-    console.log("⏭️ Skip Times:", formData.skipTimes);
-    console.log("📞 Phone Filter:", formData.phoneFilter);
-    if (formData.phoneFilter === "enter_phone") {
-      console.log("📱 Phone Number:", formData.phoneNumber);
-    }
-    console.log("📌 Enrich With Area Codes:", formData.enrichWithAreaCodes);
-    console.log("🧾 JSON File Name:", formData.jsonFileName);
-    console.log("📑 CSV File Name:", formData.csvFileName);
-    console.log("📬 Add to Instantly Campaign:", formData.addtocampaign);
-    if (formData.addtocampaign) {
-      console.log("📋 Instantly List ID:", formData.instantlyListId);
-      console.log("📋 Instantly Campaign ID:", formData.instantlyCampaignId);
-    }
-  
+  const handleQueueScrape = async () => {  
     const newJob = {
       created_at: new Date().toISOString(),
       status: "pending",
@@ -522,71 +497,111 @@ const [typeFilter, setTypeFilter] = useState<"all" | "recurring" | "one-time">("
 
 // ✅ ADD RECURRING SCHEDULE
 const handleAddRecurring = async () => {
-  if (!useRecurringSettings) return;
+  if (!useRecurringSettings) return
 
   if (!recurringHour || !recurringMinute || selectedDays.length === 0) {
-    alert("Please specify hour, minute, and at least one weekday.");
-    return;
+    alert("Please specify hour, minute, and at least one weekday.")
+    return
   }
 
-  const forcedLimit = 100;
+  const forcedLimit = 1
 
-  // 🔍 Build a unique filter across all relevant fields
-  const { data: existing } = await supabase
-    .from("recurring_scrapes")
-    .select("record_limit")
-    .eq("business_type", formData.businessType)
-    .eq("business_status", formData.businessStatus)
-    .eq("country", formData.country)
-    .eq("city", formData.city)
-    .eq("state", formData.state)
-    .eq("postal_code", formData.postalCode)
-    .eq("phone_filter", formData.phoneFilter);
+  for (const day of selectedDays) {
+    let hour = parseInt(recurringHour)
+    let minute = parseInt(recurringMinute)
 
-  // 🧮 Calculate total existing records
-  const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0);
+    let foundFreeSlot = false
+    let attempts = 0
 
-  // 🔁 Calculate new skip time
-  const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1;
+    while (!foundFreeSlot && attempts < 60) {
+      const { data: conflicts } = await supabase
+        .from("recurring_scrapes")
+        .select("id")
+        .eq("hour", hour)
+        .eq("minute", minute)
+        .contains("recurring_days", [day])
+        .eq("business_type", formData.businessType)
+        .eq("business_status", formData.businessStatus)
+        .eq("country", formData.country)
+        .eq("city", formData.city)
+        .eq("state", formData.state)
+        .eq("postal_code", formData.postalCode)
+        .eq("phone_filter", formData.phoneFilter)
 
-  const newSchedule = {
-    hour: parseInt(recurringHour),
-    minute: parseInt(recurringMinute),
-    recurring_days: selectedDays,
-    created_at: new Date().toISOString(),
-    record_limit: forcedLimit,
-    skip_times: newSkipTimes,
-    add_to_campaign: formData.addtocampaign,
-    city: formData.city,
-    state: formData.state,
-    country: formData.country,
-    postal_code: formData.postalCode,
-    business_type: formData.businessType,
-    business_status: formData.businessStatus,
-    phone_filter: formData.phoneFilter,
-  };
+      if (!conflicts || conflicts.length === 0) {
+        foundFreeSlot = true
+        break
+      }
 
-  try {
-    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule]);
+      // Increment minute and wrap to next hour if needed
+      minute += 1
+      if (minute >= 60) {
+        minute = 0
+        hour = (hour + 1) % 24
+      }
 
-    if (error) {
-      console.error("❌ Error saving recurring schedule:", error);
-      alert("Error saving recurring schedule.");
-      return;
+      attempts++
     }
 
-    alert("✅ Recurring scrape scheduled successfully!");
-    setRecurringHour("");
-    setRecurringMinute("");
-    setSelectedDays([]);
+    if (!foundFreeSlot) {
+      toast({
+        title: "⛔ Could not find available time",
+        description: `No free time found for ${day}.`,
+        variant: "destructive",
+      })
+      continue
+    }
 
-    fetchRecurringSchedules().then(setRecurringSchedules);
-  } catch (err) {
-    console.error("❌ Unexpected error:", err);
-    alert("Unexpected error occurred.");
+    // Get skip time
+    const { data: existing } = await supabase
+      .from("recurring_scrapes")
+      .select("record_limit")
+      .eq("business_type", formData.businessType)
+      .eq("business_status", formData.businessStatus)
+      .eq("country", formData.country)
+      .eq("city", formData.city)
+      .eq("state", formData.state)
+      .eq("postal_code", formData.postalCode)
+      .eq("phone_filter", formData.phoneFilter)
+
+    const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
+    const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1
+
+    const newSchedule = {
+      hour,
+      minute,
+      recurring_days: [day],
+      created_at: new Date().toISOString(),
+      record_limit: forcedLimit,
+      skip_times: newSkipTimes,
+      add_to_campaign: formData.addtocampaign,
+      city: formData.city,
+      state: formData.state,
+      country: formData.country,
+      postal_code: formData.postalCode,
+      business_type: formData.businessType,
+      business_status: formData.businessStatus,
+      phone_filter: formData.phoneFilter,
+    }
+
+    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
+    if (error) {
+      console.error("❌ Error saving schedule:", error)
+      alert(`Failed to save schedule for ${day}.`)
+    }
   }
-};
 
+  toast({
+    title: "✅ Scheduled",
+    description: "Recurring scrapes added without time conflicts.",
+  })
+
+  setRecurringHour("")
+  setRecurringMinute("")
+  setSelectedDays([])
+
+  fetchRecurringSchedules().then(setRecurringSchedules)
+}
 
 
 
