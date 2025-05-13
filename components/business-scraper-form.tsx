@@ -125,6 +125,31 @@ export function BusinessScraperForm() {
     })
   }
   const handleQueueScrape = async () => {
+    console.log("🟢 Start Scraping Clicked!");
+    console.log("📦 formData:", formData);
+    console.log("📆 From Date:", formData.fromDate);
+    console.log("📆 To Date:", formData.toDate);
+    console.log("🌍 Country:", formData.country);
+    console.log("🏙️ City:", formData.city);
+    console.log("🏞️ State:", formData.state);
+    console.log("📮 Postal Code:", formData.postalCode);
+    console.log("🏢 Business Type:", formData.businessType);
+    console.log("📊 Business Status:", formData.businessStatus);
+    console.log("📈 Limit:", formData.limit);
+    console.log("⏭️ Skip Times:", formData.skipTimes);
+    console.log("📞 Phone Filter:", formData.phoneFilter);
+    if (formData.phoneFilter === "enter_phone") {
+      console.log("📱 Phone Number:", formData.phoneNumber);
+    }
+    console.log("📌 Enrich With Area Codes:", formData.enrichWithAreaCodes);
+    console.log("🧾 JSON File Name:", formData.jsonFileName);
+    console.log("📑 CSV File Name:", formData.csvFileName);
+    console.log("📬 Add to Instantly Campaign:", formData.addtocampaign);
+    if (formData.addtocampaign) {
+      console.log("📋 Instantly List ID:", formData.instantlyListId);
+      console.log("📋 Instantly Campaign ID:", formData.instantlyCampaignId);
+    }
+  
     const newJob = {
       created_at: new Date().toISOString(),
       status: "pending",
