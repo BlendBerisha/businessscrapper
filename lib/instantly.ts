@@ -151,7 +151,8 @@ export class InstantlyAPI {
       for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
         const email = row[emailKey]?.trim()
         if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
-  
+        if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
+          
         seenEmails.add(email)
   
         const lead = {
