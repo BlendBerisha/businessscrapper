@@ -20,6 +20,23 @@ const VERIFIED_HEADERS = [
   "corp_name", "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
   "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
 ]
+interface MillionVerifierResponse {
+  status: string
+  result: string
+}
+
+const verifyEmail = async (email: string, apiKey: string): Promise<boolean> => {
+  try {
+    const { data } = await axios.get<MillionVerifierResponse>(
+      `https://api.millionverifier.com/api/v2/${apiKey}/verify/${encodeURIComponent(email)}`
+    )
+    return data.status === "ok" && data.result === "valid"
+  } catch (error) {
+    console.error("❌ Email verification error for:", email, error)
+    return false
+  }
+}
+
 
 const handler: Handler = async () => {
   const now = DateTime.now().setZone("Europe/Tirane")
@@ -81,6 +98,9 @@ const handler: Handler = async () => {
         for (const [e, title, first, last] of emailKeys) {
           if (entry[e]) {
             hasEmail = true
+            const isValid = await verifyEmail(entry[e], settings.millionApiKey)
+            await new Promise((r) => setTimeout(r, 300))
+
             const row: any = {}
             for (const key of VERIFIED_HEADERS) {
               row[key] = entry[key] ?? ""
@@ -89,7 +109,7 @@ const handler: Handler = async () => {
             row.email_title = entry[title] ?? ""
             row.email_first_name = entry[first] ?? ""
             row.email_last_name = entry[last] ?? ""
-            row.is_email_valid = entry.is_email_valid ?? "FALSE"
+            row.is_email_valid = isValid ? "TRUE" : "FALSE"
             rows.push(row)
           }
         }
