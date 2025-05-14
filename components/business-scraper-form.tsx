@@ -797,8 +797,9 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                         <SelectItem value="operational">Operational</SelectItem>
                         <SelectItem value="closed_temporarily">Temporarily Closed</SelectItem>
                         <SelectItem value="closed_permanently">Permanently Closed</SelectItem>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                      </SelectContent>
+                        <SelectItem value="closed_temporarily,operational">Operational + Temporarily Closed</SelectItem>
+                        <SelectItem value="closed_temporarily,operational,closed_permanently">All Statuses</SelectItem>
+                        </SelectContent>
                     </Select>
                   </div>
                 </div>
