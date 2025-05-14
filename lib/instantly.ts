@@ -147,14 +147,28 @@ export class InstantlyAPI {
   
     console.log(`📥 Preparing upload of leads to Instantly...`)
   
+    let injectedIndex = 0
+
     for (const row of data) {
       for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
         const email = row[emailKey]?.trim()
         if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
-        if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
-          
+    
+        // Inject test flags manually for the first 5 rows
+        if (injectedIndex < 2) {
+          row.is_email_valid = "TRUE"
+        } else if (injectedIndex < 5) {
+          row.is_email_valid = "FALSE"
+        } else {
+          break // only test 5 entries
+        }
+    
         seenEmails.add(email)
-  
+        injectedIndex++
+    
+        // only send TRUE to Instantly
+        if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
+    
         const lead = {
           email,
           first_name: row[firstNameKey] || "Unknown",
@@ -171,12 +185,13 @@ export class InstantlyAPI {
             is_email_valid: row.is_email_valid || false,
           },
         }
-  
+    
         const success = await this.addLead(lead)
         if (success) successful.push(email)
         else failed.push(email)
       }
     }
+    
   
     console.log(`✅ Successfully uploaded: ${successful.length}`)
     console.log(`❌ Failed uploads: ${failed.length}`)
