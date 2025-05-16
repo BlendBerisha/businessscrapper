@@ -183,6 +183,7 @@ export class InstantlyAPI {
             email_first_name: row[firstNameKey] || "",
             email_last_name: row[lastNameKey] || "",
             is_email_valid: row.is_email_valid || false,
+            enrich_area_codes: row["enrich area codes"] || ""
           },
         }
 
