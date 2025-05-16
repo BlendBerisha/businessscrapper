@@ -187,6 +187,8 @@ export class InstantlyAPI {
           },
         }
 
+        console.log("enrich_area_codes", lead.custom_variables.enrich_area_codes)
+
         const success = await this.addLead(lead)
         if (success) successful.push(email)
         else failed.push(email)
