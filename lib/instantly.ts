@@ -1,3 +1,6 @@
+import { getNormalizedColumn } from "@/lib/utils" // make sure path is correct
+
+
 export interface InstantlyCredentials {
   apiKey: string
   listId: string
@@ -183,7 +186,7 @@ export class InstantlyAPI {
             email_first_name: row[firstNameKey] || "",
             email_last_name: row[lastNameKey] || "",
             is_email_valid: row.is_email_valid || false,
-            enrich_area_codes: row["enrich area codes"] || ""
+            enrich_area_codes: getNormalizedColumn(row, "enrich area codes")
           },
         }
 
