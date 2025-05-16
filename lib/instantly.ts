@@ -56,7 +56,7 @@ export class InstantlyAPI {
         value === "" ||
         (typeof value === "number" && !isFinite(value))
       ) {
-        continue // Skip empty, null, undefined, or NaN values
+        continue
       }
 
       if (
@@ -94,10 +94,11 @@ export class InstantlyAPI {
     })
 
     const cleanedCustom = this.cleanData({
-      display_name: company_name,
-      first_name,
-      last_name,
-      ...custom_variables,
+      ...extra_fields, // include all original fields
+      email_title: custom_variables?.email_title || "",
+      email_first_name: first_name,
+      email_last_name: last_name,
+      is_email_valid: custom_variables?.is_email_valid || false,
     })
 
     const leadPayload = {
@@ -137,38 +138,37 @@ export class InstantlyAPI {
     const successful: string[] = []
     const failed: string[] = []
     const seenEmails = new Set<string>()
-  
+
     const emailGroups = [
       ["email", "email_title", "email_first_name", "email_last_name"],
       ["email_1", "email_1_title", "email_1_first_name", "email_1_last_name"],
       ["email_2", "email_2_title", "email_2_first_name", "email_2_last_name"],
       ["email_3", "email_3_title", "email_3_first_name", "email_3_last_name"],
     ]
-  
+
     console.log(`📥 Preparing upload of leads to Instantly...`)
-  
+
     let injectedIndex = 0
 
     for (const row of data) {
       for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
         const email = row[emailKey]?.trim()
         if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
-    
-        // Inject test flags manually for the first 5 rows
+
+        // Inject testing values manually for first 5
         if (injectedIndex < 2) {
           row.is_email_valid = "TRUE"
         } else if (injectedIndex < 5) {
           row.is_email_valid = "FALSE"
         } else {
-          break // only test 5 entries
+          continue
         }
-    
-        seenEmails.add(email)
+
         injectedIndex++
-    
-        // only send TRUE to Instantly
+        seenEmails.add(email)
+
         if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
-    
+
         const lead = {
           email,
           first_name: row[firstNameKey] || "Unknown",
@@ -185,18 +185,16 @@ export class InstantlyAPI {
             is_email_valid: row.is_email_valid || false,
           },
         }
-    
+
         const success = await this.addLead(lead)
         if (success) successful.push(email)
         else failed.push(email)
       }
     }
-    
-  
+
     console.log(`✅ Successfully uploaded: ${successful.length}`)
     console.log(`❌ Failed uploads: ${failed.length}`)
-  
+
     return { success: successful, failed }
   }
-  
 }
