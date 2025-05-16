@@ -172,6 +172,10 @@ export class InstantlyAPI {
 
         if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
 
+        const enrichValue = getNormalizedColumn(row, "enrich area codes")
+
+        console.log("🚨 Enrich field for", email, "→", enrichValue)
+        
         const lead = {
           email,
           first_name: row[firstNameKey] || "Unknown",
@@ -186,11 +190,12 @@ export class InstantlyAPI {
             email_first_name: row[firstNameKey] || "",
             email_last_name: row[lastNameKey] || "",
             is_email_valid: row.is_email_valid || false,
-            enrich_area_codes: getNormalizedColumn(row, "enrich area codes")
-          },
+            "enrich area codes": enrichValue || ""
+          }
         }
+        
 
-        console.log("enrich_area_codes", lead.custom_variables.enrich_area_codes)
+        console.log("enrich_area_codes", lead.custom_variables["enrich area codes"])
 
         const success = await this.addLead(lead)
         if (success) successful.push(email)
