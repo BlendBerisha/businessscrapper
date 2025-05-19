@@ -301,9 +301,3 @@ async function verifyEmailViaRoute(email: string, apiKey: string): Promise<{ sta
   return await res.json()
 }
 
-export function getNormalizedColumn(row: Record<string, any>, targetKey: string) {
-  const matchKey = Object.keys(row).find(
-    k => k.trim().toLowerCase() === targetKey.trim().toLowerCase()
-  )
-  return matchKey ? row[matchKey] : ""
-}
