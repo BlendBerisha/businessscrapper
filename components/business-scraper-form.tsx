@@ -504,13 +504,14 @@ const [typeFilter, setTypeFilter] = useState<"all" | "recurring" | "one-time">("
 // ✅ ADD RECURRING SCHEDULE
 const handleAddRecurring = async () => {
   if (!useRecurringSettings) return
-
   if (!recurringHour || !recurringMinute || selectedDays.length === 0) {
     alert("Please specify hour, minute, and at least one weekday.")
     return
   }
 
-  const forcedLimit = 1
+  const totalLimit = formData.limit
+  const batchSize = 100
+  const batchCount = Math.ceil(totalLimit / batchSize)
 
   for (const day of selectedDays) {
     let hour = parseInt(recurringHour)
@@ -532,21 +533,19 @@ const handleAddRecurring = async () => {
         .eq("city", formData.city)
         .eq("state", formData.state)
         .eq("postal_code", formData.postalCode)
-        .eq("with_phone", formData.phoneFilter === "with_phone" || formData.phoneFilter === "both" || formData.phoneFilter === "enter_phone")
-        .eq("without_phone", formData.phoneFilter === "without_phone" || formData.phoneFilter === "both")
-        
+        .eq("with_phone", formData.phoneFilter === "with_phone" || formData.phoneFilter === "enter_phone")
+        .eq("without_phone", formData.phoneFilter === "without_phone")
+
       if (!conflicts || conflicts.length === 0) {
         foundFreeSlot = true
         break
       }
 
-      // Increment minute and wrap to next hour if needed
       minute += 1
       if (minute >= 60) {
         minute = 0
         hour = (hour + 1) % 24
       }
-
       attempts++
     }
 
@@ -559,52 +558,44 @@ const handleAddRecurring = async () => {
       continue
     }
 
-    // Get skip time
-    const { data: existing } = await supabase
-      .from("recurring_scrapes")
-      .select("record_limit")
-      .eq("business_type", formData.businessType)
-      .eq("business_status", formData.businessStatus)
-      .eq("country", formData.country)
-      .eq("city", formData.city)
-      .eq("state", formData.state)
-      .eq("postal_code", formData.postalCode)
-      .eq("phone_filter", formData.phoneFilter)
+    const newSchedules = []
+    for (let i = 0; i < batchCount; i++) {
+      newSchedules.push({
+        hour,
+        minute,
+        recurring_days: [day],
+        created_at: new Date().toISOString(),
+        record_limit: batchSize,
+        skip_times: i + 1,
+        add_to_campaign: formData.addtocampaign,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+        postal_code: formData.postalCode,
+        business_type: formData.businessType,
+        business_status: formData.businessStatus,
+        with_phone: formData.phoneFilter === "with_phone" || formData.phoneFilter === "enter_phone",
+        without_phone: formData.phoneFilter === "without_phone",
+        enrich_with_area_codes: formData.enrichWithAreaCodes,
+        phone_filter: formData.phoneFilter,
+      })
+    }
 
-    const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
-    const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1
-
-    const newSchedule = {
-      hour,
-      minute,
-      recurring_days: [day],
-      created_at: new Date().toISOString(),
-      record_limit: forcedLimit,
-      skip_times: newSkipTimes,
-      add_to_campaign: formData.addtocampaign,
-      city: formData.city,
-      state: formData.state,
-      country: formData.country,
-      postal_code: formData.postalCode,
-      business_type: formData.businessType,
-      business_status: formData.businessStatus,
-      with_phone:
-      formData.phoneFilter === "with_phone" ||
-      formData.phoneFilter === "enter_phone",
-    without_phone:
-      formData.phoneFilter === "without_phone"
-        }
-
-    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
+    const { error } = await supabase.from("recurring_scrapes").insert(newSchedules)
     if (error) {
-      console.error("❌ Error saving schedule:", error)
-      alert(`Failed to save schedule for ${day}.`)
+      console.error("❌ Error saving batch schedules:", error)
+      toast({
+        title: "❌ Error",
+        description: `Failed to save recurring batches for ${day}.`,
+        variant: "destructive",
+      })
     }
   }
 
   toast({
-    title: "✅ Scheduled",
-    description: "Recurring scrapes added without time conflicts.",
+    title: "✅ Batches scheduled",
+    description: `Recurring batches created successfully.`,
+    variant: "success",
   })
 
   setRecurringHour("")
@@ -617,12 +608,15 @@ const handleAddRecurring = async () => {
 
 
 // 🗑 DELETE
-async function handleDeleteRecurring(id: string) {
-  const { error } = await supabase.from("recurring_scrapes").delete().eq("id", id)
+async function handleDeleteRecurring(id: string, source: string) {
+  const tableName = source === "recurring" ? "recurring_scrapes" : "scrape_queue"
+
+  const { error } = await supabase.from(tableName).delete().eq("id", id)
   if (error) {
-    console.error("Failed to delete schedule", error.message)
+    console.error(`Failed to delete schedule from ${tableName}`, error.message)
     return
   }
+
   setRecurringSchedules((prev) => prev.filter((entry) => entry.id !== id))
 }
 
@@ -797,8 +791,9 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                         <SelectItem value="operational">Operational</SelectItem>
                         <SelectItem value="closed_temporarily">Temporarily Closed</SelectItem>
                         <SelectItem value="closed_permanently">Permanently Closed</SelectItem>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                      </SelectContent>
+                        <SelectItem value="closed_temporarily,operational">Operational + Temporarily Closed</SelectItem>
+                        <SelectItem value="closed_temporarily,operational,closed_permanently">All Statuses</SelectItem>
+                        </SelectContent>
                     </Select>
                   </div>
                 </div>
@@ -810,17 +805,16 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                   <Input
   id="limit"
   type="number"
-  value={useRecurringSettings ? 1 : formData.limit ?? ""}
+  value={formData.limit ?? ""}
   onChange={(e) => {
     const val = e.target.value
-    if (!useRecurringSettings) {
-      handleChange("limit", val === "" ? null : parseInt(val))
-    }
+    handleChange("limit", val === "" ? null : parseInt(val))
   }}
   min={1}
-  max={100}
-  disabled={useRecurringSettings}
+  max={useRecurringSettings ? 1000 : 100}
 />
+
+
                     <p className="text-xs text-gray-500">Number of records per API request</p>
                   </div>
                   <div className="space-y-2">
@@ -1181,7 +1175,7 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeleteRecurring(schedule.id)}
+                      onClick={() => handleDeleteRecurring(schedule.id, schedule.source)}
                       className="px-2 py-1"
                     >
                       Delete
@@ -1237,4 +1231,5 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
 
   )
 }
+
 
