@@ -608,12 +608,15 @@ const handleAddRecurring = async () => {
 
 
 // 🗑 DELETE
-async function handleDeleteRecurring(id: string) {
-  const { error } = await supabase.from("recurring_scrapes").delete().eq("id", id)
+async function handleDeleteRecurring(id: string, source: string) {
+  const tableName = source === "recurring" ? "recurring_scrapes" : "scrape_queue"
+
+  const { error } = await supabase.from(tableName).delete().eq("id", id)
   if (error) {
-    console.error("Failed to delete schedule", error.message)
+    console.error(`Failed to delete schedule from ${tableName}`, error.message)
     return
   }
+
   setRecurringSchedules((prev) => prev.filter((entry) => entry.id !== id))
 }
 
@@ -1173,7 +1176,7 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeleteRecurring(schedule.id)}
+                      onClick={() => handleDeleteRecurring(schedule.id, schedule.source)}
                       className="px-2 py-1"
                     >
                       Delete
