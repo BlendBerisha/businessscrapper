@@ -504,14 +504,13 @@ const [typeFilter, setTypeFilter] = useState<"all" | "recurring" | "one-time">("
 // ✅ ADD RECURRING SCHEDULE
 const handleAddRecurring = async () => {
   if (!useRecurringSettings) return
+
   if (!recurringHour || !recurringMinute || selectedDays.length === 0) {
     alert("Please specify hour, minute, and at least one weekday.")
     return
   }
 
-  const totalLimit = formData.limit
-  const batchSize = 100
-  const batchCount = Math.ceil(totalLimit / batchSize)
+  const forcedLimit = 1
 
   for (const day of selectedDays) {
     let hour = parseInt(recurringHour)
@@ -533,19 +532,21 @@ const handleAddRecurring = async () => {
         .eq("city", formData.city)
         .eq("state", formData.state)
         .eq("postal_code", formData.postalCode)
-        .eq("with_phone", formData.phoneFilter === "with_phone" || formData.phoneFilter === "enter_phone")
-        .eq("without_phone", formData.phoneFilter === "without_phone")
-
+        .eq("with_phone", formData.phoneFilter === "with_phone" || formData.phoneFilter === "both" || formData.phoneFilter === "enter_phone")
+        .eq("without_phone", formData.phoneFilter === "without_phone" || formData.phoneFilter === "both")
+        
       if (!conflicts || conflicts.length === 0) {
         foundFreeSlot = true
         break
       }
 
+      // Increment minute and wrap to next hour if needed
       minute += 1
       if (minute >= 60) {
         minute = 0
         hour = (hour + 1) % 24
       }
+
       attempts++
     }
 
@@ -558,44 +559,52 @@ const handleAddRecurring = async () => {
       continue
     }
 
-    const newSchedules = []
-    for (let i = 0; i < batchCount; i++) {
-      newSchedules.push({
-        hour,
-        minute,
-        recurring_days: [day],
-        created_at: new Date().toISOString(),
-        record_limit: batchSize,
-        skip_times: i + 1,
-        add_to_campaign: formData.addtocampaign,
-        city: formData.city,
-        state: formData.state,
-        country: formData.country,
-        postal_code: formData.postalCode,
-        business_type: formData.businessType,
-        business_status: formData.businessStatus,
-        with_phone: formData.phoneFilter === "with_phone" || formData.phoneFilter === "enter_phone",
-        without_phone: formData.phoneFilter === "without_phone",
-        enrich_with_area_codes: formData.enrichWithAreaCodes,
-        phone_filter: formData.phoneFilter,
-      })
-    }
+    // Get skip time
+    const { data: existing } = await supabase
+      .from("recurring_scrapes")
+      .select("record_limit")
+      .eq("business_type", formData.businessType)
+      .eq("business_status", formData.businessStatus)
+      .eq("country", formData.country)
+      .eq("city", formData.city)
+      .eq("state", formData.state)
+      .eq("postal_code", formData.postalCode)
+      .eq("phone_filter", formData.phoneFilter)
 
-    const { error } = await supabase.from("recurring_scrapes").insert(newSchedules)
+    const totalLimit = (existing || []).reduce((sum, r) => sum + (r.record_limit || 0), 0)
+    const newSkipTimes = Math.floor(totalLimit / forcedLimit) + 1
+
+    const newSchedule = {
+      hour,
+      minute,
+      recurring_days: [day],
+      created_at: new Date().toISOString(),
+      record_limit: forcedLimit,
+      skip_times: newSkipTimes,
+      add_to_campaign: formData.addtocampaign,
+      city: formData.city,
+      state: formData.state,
+      country: formData.country,
+      postal_code: formData.postalCode,
+      business_type: formData.businessType,
+      business_status: formData.businessStatus,
+      with_phone:
+      formData.phoneFilter === "with_phone" ||
+      formData.phoneFilter === "enter_phone",
+    without_phone:
+      formData.phoneFilter === "without_phone"
+        }
+
+    const { error } = await supabase.from("recurring_scrapes").insert([newSchedule])
     if (error) {
-      console.error("❌ Error saving batch schedules:", error)
-      toast({
-        title: "❌ Error",
-        description: `Failed to save recurring batches for ${day}.`,
-        variant: "destructive",
-      })
+      console.error("❌ Error saving schedule:", error)
+      alert(`Failed to save schedule for ${day}.`)
     }
   }
 
   toast({
-    title: "✅ Batches scheduled",
-    description: `Recurring batches created successfully.`,
-    variant: "success",
+    title: "✅ Scheduled",
+    description: "Recurring scrapes added without time conflicts.",
   })
 
   setRecurringHour("")
@@ -788,9 +797,8 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                         <SelectItem value="operational">Operational</SelectItem>
                         <SelectItem value="closed_temporarily">Temporarily Closed</SelectItem>
                         <SelectItem value="closed_permanently">Permanently Closed</SelectItem>
-                        <SelectItem value="closed_temporarily,operational">Operational + Temporarily Closed</SelectItem>
-                        <SelectItem value="closed_temporarily,operational,closed_permanently">All Statuses</SelectItem>
-                        </SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
                 </div>
@@ -1229,5 +1237,4 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
 
   )
 }
-
 
