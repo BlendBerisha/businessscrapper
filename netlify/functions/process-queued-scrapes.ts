@@ -21,21 +21,35 @@ const handler: Handler = async () => {
     .limit(1)
 
   if (error || !jobs || jobs.length === 0) {
+    console.log("🟡 No pending jobs or error fetching queue:", error)
     return { statusCode: 200, body: "No pending jobs." }
   }
 
   const job = jobs[0]
+  console.log("🟢 Running job ID:", job.id)
 
   await supabase.from("scrape_queue").update({ status: "running" }).eq("id", job.id)
 
   try {
-    const { data: settingsData } = await supabase
+    const { data: settingsData, error: settingsError } = await supabase
       .from("settings")
       .select("value")
       .eq("key", "scraperSettings")
       .limit(1)
 
+    console.log("⚙️ Settings fetched:", settingsData)
+    if (settingsError) {
+      console.error("❌ Error fetching settings:", settingsError)
+      throw new Error("Failed to fetch scraper settings")
+    }
+
     const settings = settingsData?.[0]?.value
+
+    if (!settings?.targetronApiKey) {
+      throw new Error("Missing Targetron API key in settings")
+    }
+
+    console.log("🔐 Targetron API key:", settings.targetronApiKey.slice(0, 6) + "...")
 
     const businessData = await fetchBusinessData({
       apiKey: settings.targetronApiKey,
@@ -56,6 +70,7 @@ const handler: Handler = async () => {
     })
 
     if (!businessData?.length) {
+      console.log("🟡 No data found for this job.")
       await supabase.from("scrape_queue").update({ status: "no_results" }).eq("id", job.id)
       return { statusCode: 200, body: "No data found." }
     }
@@ -63,6 +78,7 @@ const handler: Handler = async () => {
     let verifiedData = businessData
 
     if (job.verify_emails && settings.millionApiKey) {
+      console.log("📧 Verifying emails using Million Verifier...")
       verifiedData = await verifyEmails(businessData, settings.millionApiKey)
     }
 
@@ -95,7 +111,7 @@ const handler: Handler = async () => {
       body: `✅ Scrape job ${job.id} completed and stored.`,
     }
   } catch (err: any) {
-    console.error("❌ Job failed:", err)
+    console.error("❌ Job failed:", err.message || err)
     await supabase.from("scrape_queue").update({
       status: "failed",
       error: err.message,
@@ -106,4 +122,3 @@ const handler: Handler = async () => {
 }
 
 export { handler }
-
