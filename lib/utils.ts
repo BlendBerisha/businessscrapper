@@ -73,10 +73,10 @@ export function convertJsonToCsv(jsonData: any[], filename: string) {
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
 
   // ✅ Prevent empty workbook crash
-  // if (withEmails.length === 0 && withoutEmails.length === 0) {
-  //   console.warn("📭 No data to write into workbook. Skipping file generation.")
-  //   return
-  // }
+  if (withEmails.length === 0 && withoutEmails.length === 0) {
+    console.warn("📭 No data to write into workbook. Skipping file generation.")
+    return
+  }
 
   const workbook = XLSX.utils.book_new()
 
@@ -85,19 +85,13 @@ export function convertJsonToCsv(jsonData: any[], filename: string) {
     applyFormatting(sheet, columnOrder)
     XLSX.utils.book_append_sheet(workbook, sheet, "With Emails")
   }
-  
+
   if (withoutEmails.length > 0) {
     const sheet = createWorksheet(withoutEmails, columnOrder)
     applyFormatting(sheet, columnOrder)
     XLSX.utils.book_append_sheet(workbook, sheet, "No Emails")
   }
-  
-  // 🛡️ Fallback: Add placeholder sheet if no data
-  if (withEmails.length === 0 && withoutEmails.length === 0) {
-    const emptySheet = XLSX.utils.aoa_to_sheet([["No data available"]])
-    XLSX.utils.book_append_sheet(workbook, emptySheet, "No Data")
-  }
-  
+
   const excelFilename = filename.endsWith(".xlsx")
     ? filename
     : filename.endsWith(".csv")
@@ -300,4 +294,3 @@ async function verifyEmailViaRoute(email: string, apiKey: string): Promise<{ sta
 
   return await res.json()
 }
-
