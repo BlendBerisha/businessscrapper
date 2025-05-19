@@ -805,16 +805,17 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                   <Input
   id="limit"
   type="number"
-  value={formData.limit ?? ""}
+  value={useRecurringSettings ? 1 : formData.limit ?? ""}
   onChange={(e) => {
     const val = e.target.value
-    handleChange("limit", val === "" ? null : parseInt(val))
+    if (!useRecurringSettings) {
+      handleChange("limit", val === "" ? null : parseInt(val))
+    }
   }}
   min={1}
-  max={useRecurringSettings ? 1000 : 100}
+  max={100}
+  disabled={useRecurringSettings}
 />
-
-
                     <p className="text-xs text-gray-500">Number of records per API request</p>
                   </div>
                   <div className="space-y-2">
