@@ -49,8 +49,13 @@ export function SettingsDialog({ open, onOpenChange, formData, onFormDataChange 
       const res = await fetch("/api/get-settings")
       const data = await res.json()
       const merged = { ...formData, ...data }
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔑 Loaded Targetron API Key:", merged.targetronApiKey)
+      }
+  
       setLocalSettings(merged)
-      onFormDataChange(merged)
+      onFormDataChange(merged)  
       setLoading(false)
     }
     if (open) fetchSettings()
