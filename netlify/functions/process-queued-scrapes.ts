@@ -1,5 +1,3 @@
-// /netlify/functions/process-queued-scrapes.ts
-
 import { Handler } from "@netlify/functions"
 import { supabase } from "../../lib/supabase"
 import { fetchBusinessData } from "../../actions/targetron"
@@ -51,23 +49,39 @@ const handler: Handler = async () => {
 
     console.log("🔐 Targetron API key:", settings.targetronApiKey.slice(0, 6) + "...")
 
-    const businessData = await fetchBusinessData({
-      apiKey: settings.targetronApiKey,
-      country: job.country,
-      city: job.city,
-      state: job.state,
-      postalCode: job.postal_code,
-      businessType: job.business_type,
-      businessStatus: job.business_status,
-      limit: job.record_limit,
-      skipTimes: job.skip_times,
-      addedFrom: job.from_date,
-      addedTo: job.to_date,
-      withPhone: job.phone_filter !== "without_phone",
-      withoutPhone: job.phone_filter !== "with_phone",
-      enrichWithAreaCodes: job.enrich_with_area_codes,
-      phoneNumber: job.phone_number || undefined,
-    })
+    // 🔁 Retry fetchBusinessData with backoff
+    let businessData = null
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`🔄 Attempt ${attempt} to fetch business data...`)
+        businessData = await fetchBusinessData({
+          apiKey: settings.targetronApiKey,
+          country: job.country,
+          city: job.city,
+          state: job.state,
+          postalCode: job.postal_code,
+          businessType: job.business_type,
+          businessStatus: job.business_status,
+          limit: job.record_limit,
+          skipTimes: job.skip_times,
+          addedFrom: job.from_date,
+          addedTo: job.to_date,
+          withPhone: job.phone_filter !== "without_phone",
+          withoutPhone: job.phone_filter !== "with_phone",
+          enrichWithAreaCodes: job.enrich_with_area_codes,
+          phoneNumber: job.phone_number || undefined,
+        })
+        break // ✅ success
+      } catch (err: any) {
+        console.error(`❌ Attempt ${attempt} failed:`, err.message)
+        if (attempt === 3 || !err.message.includes("503")) {
+          throw err
+        }
+        const backoff = 1000 * attempt
+        console.log(`⏳ Waiting ${backoff}ms before retry...`)
+        await new Promise((res) => setTimeout(res, backoff))
+      }
+    }
 
     if (!businessData?.length) {
       console.log("🟡 No data found for this job.")
