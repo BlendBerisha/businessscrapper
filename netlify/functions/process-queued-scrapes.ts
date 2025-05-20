@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ✅ Helper: Fetch business data
+// ✅ Helper: Fetch business data (with estimate check)
 async function fetchBusinessData(params: {
   apiKey: string
   country: string
@@ -20,17 +20,34 @@ async function fetchBusinessData(params: {
   limit: number
   skipTimes?: number
 }) {
-  const query = new URLSearchParams({
+  const baseQuery = new URLSearchParams({
     cc: params.country,
     city: params.city,
     state: params.state || "",
     postalCode: params.postalCode || "",
     type: params.businessType,
-    limit: String(params.limit),
-    skip: String(((params.skipTimes || 1) - 1) * params.limit),
   })
 
-  const url = `https://dahab.app.outscraper.com/data/places?${query.toString()}`
+  // 1️⃣ Estimate check
+  const estimateUrl = `https://dahab.app.outscraper.com/estimate/places?${baseQuery.toString()}`
+  const estimateRes = await fetch(estimateUrl, {
+    method: "GET",
+    headers: { "X-API-KEY": params.apiKey },
+  })
+
+  const estimateData = await estimateRes.json()
+  const total = estimateData?.total || 0
+
+  if (!estimateRes.ok || total === 0) {
+    throw new Error(`Estimate failed or no data found. Status: ${estimateRes.status}, Total: ${total}`)
+  }
+
+  // 2️⃣ Fetch full data
+  const fullQuery = baseQuery
+  fullQuery.set("limit", String(params.limit))
+  fullQuery.set("skip", String(((params.skipTimes || 1) - 1) * params.limit))
+
+  const url = `https://dahab.app.outscraper.com/data/places?${fullQuery.toString()}`
   const res = await fetch(url, {
     method: "GET",
     headers: {
@@ -47,7 +64,7 @@ async function fetchBusinessData(params: {
   return json.data
 }
 
-// ✅ Main function
+// ✅ Main handler
 const handler: Handler = async () => {
   const { data: jobs, error } = await supabase
     .from("scrape_queue")
@@ -59,27 +76,19 @@ const handler: Handler = async () => {
   if (error || !jobs || jobs.length === 0) {
     console.log("🟡 No pending jobs or error fetching queue:", error)
 
-    // ⏱️ Reset long-running jobs to failed (e.g. older than 30 minutes)
+    // ⏱️ Cleanup stale running jobs (older than 30m)
     const cleanup = await supabase
-    .from("scrape_queue")
-    .update({
-      status: "failed",
-      error: "Timed out after 30m",
-    })
-    .lt("updated_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
-    .eq("status", "running") as {
-      data: { id: string }[] | null
-      error: any
-    }
-  
-  console.log("🧹 Cleaned up stuck jobs:", cleanup.data ? cleanup.data.length : 0)
-  
+      .from("scrape_queue")
+      .update({ status: "failed", error: "Timed out after 30m" })
+      .lt("updated_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+      .eq("status", "running") as { data: { id: string }[] | null, error: any }
+
+    console.log("🧹 Cleaned up stuck jobs:", cleanup.data ? cleanup.data.length : 0)
     return { statusCode: 200, body: "No pending jobs." }
   }
 
   const job = jobs[0]
   console.log("🟢 Running job ID:", job.id)
-
   await supabase.from("scrape_queue").update({ status: "running" }).eq("id", job.id)
 
   try {
@@ -95,11 +104,7 @@ const handler: Handler = async () => {
 
     const settings = settingsData[0].value
     const apiKey = settings.targetronApiKey?.trim()
-
-    if (!apiKey) {
-      throw new Error("Missing Targetron API key in settings")
-    }
-
+    if (!apiKey) throw new Error("Missing Targetron API key in settings")
     console.log("🔐 Using API key:", apiKey.slice(0, 6) + "...")
 
     let businessData = null
