@@ -3,13 +3,13 @@ import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
 import { supabase } from "../../lib/supabase"
 
-// ✅ Create admin client for file upload
+// ✅ Admin client for storage uploads
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ✅ Helper: Fetch data from Outscraper-compatible API
+// ✅ Helper: Fetch business data
 async function fetchBusinessData(params: {
   apiKey: string
   country: string
@@ -24,14 +24,13 @@ async function fetchBusinessData(params: {
     cc: params.country,
     city: params.city,
     state: params.state || "",
-    postal_code: params.postalCode || "",
+    postalCode: params.postalCode || "",
     type: params.businessType,
     limit: String(params.limit),
-    skip: String((params.skipTimes || 1) - 1), // Outscraper uses offset not multiplier
+    skip: String(((params.skipTimes || 1) - 1) * params.limit),
   })
 
   const url = `https://dahab.app.outscraper.com/data/places?${query.toString()}`
-
   const res = await fetch(url, {
     method: "GET",
     headers: {
@@ -40,13 +39,15 @@ async function fetchBusinessData(params: {
   })
 
   if (!res.ok) {
-    throw new Error(`API request failed with status ${res.status}`)
+    const text = await res.text()
+    throw new Error(`API request failed with status ${res.status}: ${text}`)
   }
 
-  return res.json()
+  const json = await res.json()
+  return json.data
 }
 
-// ✅ Main Netlify Function
+// ✅ Main function
 const handler: Handler = async () => {
   const { data: jobs, error } = await supabase
     .from("scrape_queue")
@@ -77,13 +78,13 @@ const handler: Handler = async () => {
     }
 
     const settings = settingsData[0].value
-    const apiKey = (settings.targetronApiKey || "").replace(/\/$/, "") // strip trailing slash
+    const apiKey = settings.targetronApiKey?.trim()
 
     if (!apiKey) {
       throw new Error("Missing Targetron API key in settings")
     }
 
-    console.log("🔐 Targetron API key:", apiKey.slice(0, 6) + "...")
+    console.log("🔐 Using API key:", apiKey.slice(0, 6) + "...")
 
     let businessData = null
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -102,20 +103,16 @@ const handler: Handler = async () => {
         break
       } catch (err: any) {
         console.error(`❌ Attempt ${attempt} failed:`, err.message)
-        if (attempt === 3 || !err.message.includes("503")) {
-          throw err
-        }
+        if (attempt === 3 || !err.message.includes("503")) throw err
         await new Promise((res) => setTimeout(res, 1000 * attempt))
       }
     }
 
     if (!businessData?.length) {
-      console.log("🟡 No data found for this job.")
+      console.log("🟡 No data found.")
       await supabase.from("scrape_queue").update({ status: "no_results" }).eq("id", job.id)
       return { statusCode: 200, body: "No data found." }
     }
-
-    // ✅ Optional: email verification step (skipped for now)
 
     const sheet = XLSX.utils.json_to_sheet(businessData)
     const book = XLSX.utils.book_new()
@@ -146,13 +143,10 @@ const handler: Handler = async () => {
       body: `✅ Scrape job ${job.id} completed and stored.`,
     }
   } catch (err: any) {
-    console.error("❌ Job failed:", err.message || err)
+    console.error("❌ Job failed:", err.message)
     await supabase
       .from("scrape_queue")
-      .update({
-        status: "failed",
-        error: err.message || "Unknown error",
-      })
+      .update({ status: "failed", error: err.message })
       .eq("id", job.id)
 
     return {
