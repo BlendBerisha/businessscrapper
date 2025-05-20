@@ -58,6 +58,22 @@ const handler: Handler = async () => {
 
   if (error || !jobs || jobs.length === 0) {
     console.log("🟡 No pending jobs or error fetching queue:", error)
+
+    // ⏱️ Reset long-running jobs to failed (e.g. older than 30 minutes)
+    const cleanup = await supabase
+    .from("scrape_queue")
+    .update({
+      status: "failed",
+      error: "Timed out after 30m",
+    })
+    .lt("updated_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+    .eq("status", "running") as {
+      data: { id: string }[] | null
+      error: any
+    }
+  
+  console.log("🧹 Cleaned up stuck jobs:", cleanup.data ? cleanup.data.length : 0)
+  
     return { statusCode: 200, body: "No pending jobs." }
   }
 
