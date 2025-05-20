@@ -1069,8 +1069,11 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                 {/* Submit Button */}
                 <Button
   type="button"
-  onClick={useRecurringSettings ? handleAddRecurring : handleQueueScrape}
-  disabled={useRecurringSettings && isLoading} // ❗only lock if recurring
+  onClick={() => {
+    console.log("🔍 Scrape form submitted with data:", formData)
+    useRecurringSettings ? handleAddRecurring() : handleQueueScrape()
+  }}
+  disabled={useRecurringSettings && isLoading}
   className="w-full"
 >
   {isLoading && useRecurringSettings ? (
@@ -1082,6 +1085,7 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
     useRecurringSettings ? "Start Timed Scraping" : "Start Scraping"
   )}
 </Button>
+
 
 
                 {/* Download Buttons - Only show if data is available */}
