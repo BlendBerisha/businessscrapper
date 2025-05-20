@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ✅ Helper: Fetch business data (with estimate check)
+// ✅ Helper: Fetch business data (with estimate check and timeout)
 async function fetchBusinessData(params: {
   apiKey: string
   country: string
@@ -20,6 +20,10 @@ async function fetchBusinessData(params: {
   limit: number
   skipTimes?: number
 }) {
+  const timeoutMs = 5000
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
   const baseQuery = new URLSearchParams({
     cc: params.country,
     city: params.city,
@@ -33,7 +37,9 @@ async function fetchBusinessData(params: {
   const estimateRes = await fetch(estimateUrl, {
     method: "GET",
     headers: { "X-API-KEY": params.apiKey },
+    signal: controller.signal,
   })
+  clearTimeout(timer)
 
   const estimateData = await estimateRes.json()
   const total = estimateData?.total || 0
@@ -42,7 +48,10 @@ async function fetchBusinessData(params: {
     throw new Error(`Estimate failed or no data found. Status: ${estimateRes.status}, Total: ${total}`)
   }
 
-  // 2️⃣ Fetch full data
+  // 2️⃣ Fetch full data (with separate timeout)
+  const fetchController = new AbortController()
+  const fetchTimer = setTimeout(() => fetchController.abort(), timeoutMs)
+
   const fullQuery = baseQuery
   fullQuery.set("limit", String(params.limit))
   fullQuery.set("skip", String(((params.skipTimes || 1) - 1) * params.limit))
@@ -53,7 +62,9 @@ async function fetchBusinessData(params: {
     headers: {
       "X-API-KEY": params.apiKey,
     },
+    signal: fetchController.signal,
   })
+  clearTimeout(fetchTimer)
 
   if (!res.ok) {
     const text = await res.text()
