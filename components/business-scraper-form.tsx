@@ -14,7 +14,7 @@ import { verifyEmails } from "@/actions/million-verifier"
 import { uploadToInstantly } from "@/actions/instantly"
 import { sendTelegramMessage, sendTelegramFile } from "@/actions/telegram"
 import { SettingsDialog } from "@/components/settings-dialog"
-import { Loader2, Calendar, Settings, Plus, FileJson, FileSpreadsheet, Download } from "lucide-react"
+import { Loader2, Calendar, Settings, Plus, FileJson, FileSpreadsheet, Download, HelpCircle } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase"
 import { fetchRecurringSchedules } from "@/lib/utils" // adjust path
 import { useRouter } from "next/navigation"
 import { useUser } from "@/lib/useUser"
+import { HelpDialog } from "@/components/help-dialog"
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -91,6 +92,7 @@ const defaultFormData = {
 export function BusinessScraperForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [formData, setFormData] = useState(defaultFormData)
   const [isClient, setIsClient] = useState(false)
   const [businessData, setBusinessData] = useState<any[]>([])
@@ -663,6 +665,17 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
         <Settings className="h-4 w-4" />
         <span>Settings</span>
       </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsHelpOpen(true)}
+        className="flex items-center gap-1"
+      >
+        <HelpCircle className="h-4 w-4" />
+        <span>Help</span>
+      </Button>
+
+      <HelpDialog open={isHelpOpen} onOpenChange={setIsHelpOpen} />
 
       <Button
         variant="outline"
