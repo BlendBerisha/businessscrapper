@@ -6,9 +6,6 @@ import axios from "axios"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
 
-const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
-const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID!
-
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,6 +20,23 @@ const VERIFIED_HEADERS = [
   "corp_name", "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
   "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
 ]
+interface MillionVerifierResponse {
+  status: string
+  result: string
+}
+
+const verifyEmail = async (email: string, apiKey: string): Promise<boolean> => {
+  try {
+    const { data } = await axios.get<MillionVerifierResponse>(
+      `https://api.millionverifier.com/api/v2/${apiKey}/verify/${encodeURIComponent(email)}`
+    )
+    return data.status === "ok" && data.result === "valid"
+  } catch (error) {
+    console.error("❌ Email verification error for:", email, error)
+    return false
+  }
+}
+
 
 const handler: Handler = async () => {
   const now = DateTime.now().setZone("Europe/Tirane")
@@ -38,6 +52,9 @@ const handler: Handler = async () => {
     .limit(1)
 
   const settings = settingsData?.[0]?.value
+  const slackBotToken = settings?.slackBotToken
+  const slackChannelId = settings?.slackChannelId
+
   const dueSchedules = schedules?.filter(
     (s) =>
       s.recurring_days?.includes(currentDay) &&
@@ -65,7 +82,7 @@ const handler: Handler = async () => {
       })
 
       if (!businessData?.length) {
-        await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`)
+        await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`, slackBotToken, slackChannelId)
         continue
       }
 
@@ -81,6 +98,9 @@ const handler: Handler = async () => {
         for (const [e, title, first, last] of emailKeys) {
           if (entry[e]) {
             hasEmail = true
+            const isValid = await verifyEmail(entry[e], settings.millionApiKey)
+            await new Promise((r) => setTimeout(r, 300))
+
             const row: any = {}
             for (const key of VERIFIED_HEADERS) {
               row[key] = entry[key] ?? ""
@@ -89,7 +109,7 @@ const handler: Handler = async () => {
             row.email_title = entry[title] ?? ""
             row.email_first_name = entry[first] ?? ""
             row.email_last_name = entry[last] ?? ""
-            row.is_email_valid = entry.is_email_valid ?? "FALSE"
+            row.is_email_valid = isValid ? "TRUE" : "FALSE"
             rows.push(row)
           }
         }
@@ -125,33 +145,41 @@ const handler: Handler = async () => {
 
       if (uploadError) {
         console.error("❌ Upload error:", uploadError)
-        await postSlackMessage(`❌ Upload to storage failed for ${schedule.city}`)
+        await postSlackMessage(`❌ Upload to storage failed for ${schedule.city}`, slackBotToken, slackChannelId)
         continue
       }
 
       const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
 
       await postSlackMessage(
-        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${rows.length} rows.`
+        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${rows.length} rows.`,
+        slackBotToken,
+        slackChannelId
       )
+
+      await supabase
+        .from("recurring_scrapes")
+        .update({ skip_times: (schedule.skip_times || 0) + 1 })
+        .eq("id", schedule.id)
+
     } catch (err) {
       console.error(`❌ Error in schedule ID ${schedule.id}`, err)
-      await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}.`)
+      await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}.`, slackBotToken, slackChannelId)
     }
   }
 
   return { statusCode: 200, body: "✅ Done processing schedules" }
 }
 
-async function postSlackMessage(text: string) {
+async function postSlackMessage(text: string, slackBotToken: string, slackChannelId: string) {
   try {
     await axios.post("https://slack.com/api/chat.postMessage", {
-      channel: SLACK_CHANNEL_ID,
+      channel: slackChannelId,
       text,
       mrkdwn: true,
     }, {
       headers: {
-        Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+        Authorization: `Bearer ${slackBotToken}`,
         "Content-Type": "application/json",
       },
     })

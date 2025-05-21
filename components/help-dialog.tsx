@@ -17,11 +17,12 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
         </DialogHeader>
 
         <Tabs defaultValue="targetron" className="w-full mt-4">
-          <TabsList className="grid grid-cols-5">
+          <TabsList className="grid grid-cols-6">
             <TabsTrigger value="targetron">Targetron</TabsTrigger>
             <TabsTrigger value="slack">Slack</TabsTrigger>
             <TabsTrigger value="instantly">Instantly</TabsTrigger>
             <TabsTrigger value="verifier">Million Verifier</TabsTrigger>
+            <TabsTrigger value="supabase">Supabase</TabsTrigger>
             <TabsTrigger value="scraping">Start Scraping</TabsTrigger>
           </TabsList>
           <TabsContent value="targetron">
@@ -299,12 +300,138 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
     </div>
   </div>
 </TabsContent>
+<TabsContent value="supabase">
+  <div className="text-sm text-muted-foreground space-y-4">
+    <div>
+      <p className="font-semibold mb-1">🧠 What is Supabase Used For?</p>
+      <p>
+        Supabase is used to store and manage queued scraping jobs, recurring scrape schedules, and app-wide settings.
+        It acts as your project’s lightweight backend database with real-time capabilities.
+      </p>
+    </div>
+
+    <div>
+      <p className="font-semibold mb-1">🔐 Environment Variables</p>
+      <ul className="list-disc list-inside space-y-1">
+        <li><code>SUPABASE_URL</code> – Your Supabase project URL (e.g. <code>https://xyzcompany.supabase.co</code>)</li>
+        <li><code>SUPABASE_ANON_KEY</code> – The public (anon) API key from your Supabase dashboard</li>
+      </ul>
+      <p className="text-xs text-gray-500">
+        Add these to your <strong>.env</strong> file (locally) or to Netlify under: <code>Site Settings → Environment Variables</code>.
+      </p>
+    </div>
+
+    <div>
+      <p className="font-semibold mb-1">📊 Tables You Must Create</p>
+      <p>Below are the key Supabase tables and their purpose in this system:</p>
+
+      <ul className="list-disc list-inside space-y-2 mt-2">
+        <li>
+          <strong>scrape_queue</strong>:  
+          Stores one-time scraping jobs submitted by the user.
+          <br />
+          Fields include: <code>status</code>, <code>city</code>, <code>record_limit</code>, <code>verify_emails</code>, <code>json_file_name</code>, etc.
+        </li>
+        <li>
+          <strong>recurring_scrapes</strong>:  
+          Used for automated weekly scraping jobs based on a recurring schedule.
+          <br />
+          Fields include: <code>recurring_days[]</code>, <code>hour</code>, <code>minute</code>, <code>record_limit</code>, <code>skip_times</code>, etc.
+        </li>
+        <li>
+          <strong>settings</strong>:  
+          Stores JSON-based global config, such as tokens, API keys, or user preferences.
+          <br />
+          Fields: <code>key (text)</code>, <code>value (jsonb)</code>
+        </li>
+      </ul>
+    </div>
+
+    <div>
+      <p className="font-semibold mb-1">✅ How to Create Tables</p>
+      <p>Go to the <strong>Supabase SQL Editor</strong> and run the following SQL snippets:</p>
+
+      <details className="border rounded p-2 bg-gray-50">
+        <summary className="cursor-pointer font-medium">scrape_queue</summary>
+        <pre className="text-xs mt-2 overflow-x-auto">
+CREATE TABLE scrape_queue (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at timestamptz DEFAULT now(),
+  status text DEFAULT 'pending',
+  record_limit integer,
+  skip_times integer,
+  add_to_campaign boolean,
+  city text,
+  state text,
+  country text,
+  postal_code text,
+  business_type text,
+  business_status text,
+  from_date date,
+  to_date date,
+  phone_filter text,
+  phone_number text,
+  verify_emails boolean,
+  enrich_with_area_codes boolean,
+  json_file_name text,
+  csv_file_name text
+);
+        </pre>
+      </details>
+
+      <details className="border rounded p-2 bg-gray-50">
+        <summary className="cursor-pointer font-medium">recurring_scrapes</summary>
+        <pre className="text-xs mt-2 overflow-x-auto">
+CREATE TABLE recurring_scrapes (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  recurring_days text[] NOT NULL,
+  hour integer NOT NULL,
+  minute integer NOT NULL,
+  city text,
+  state text,
+  country text,
+  postal_code text,
+  business_type text,
+  business_status text,
+  record_limit integer,
+  skip_times integer,
+  add_to_campaign boolean,
+  created_at timestamptz DEFAULT now(),
+  with_phone boolean DEFAULT true,
+  without_phone boolean DEFAULT false,
+  enrich_with_area_codes boolean DEFAULT false
+);
+        </pre>
+      </details>
+
+      <details className="border rounded p-2 bg-gray-50">
+        <summary className="cursor-pointer font-medium">settings</summary>
+        <pre className="text-xs mt-2 overflow-x-auto">
+CREATE TABLE settings (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL
+);
+        </pre>
+      </details>
+    </div>
+
+    <div>
+      <p className="font-semibold text-red-600">⚠️ Tips</p>
+      <ul className="list-disc list-inside space-y-1">
+        <li>Only use <code>anon</code> keys in your frontend app.</li>
+        <li>Use RLS (Row-Level Security) only if you configure user auth — otherwise disable it.</li>
+        <li>Monitor API usage in the Supabase dashboard to avoid rate limits.</li>
+      </ul>
+    </div>
+  </div>
+</TabsContent>
+
 <TabsContent value="scraping">
   <div className="text-sm text-muted-foreground space-y-4">
     <div>
       <p className="font-semibold mb-1">🚀 How to Start Scraping</p>
       <p>
-        This application allows you to scrape business data using Targetron, validate emails via Million Verifier, and optionally send results to Telegram or upload to Instantly. Here’s how the process works:
+        This application allows you to scrape business data using Targetron, validate emails via Million Verifier, and optionally send results to Slack or upload to Instantly. Here’s how the process works:
       </p>
     </div>
 
