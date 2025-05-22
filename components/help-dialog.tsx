@@ -254,6 +254,19 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
         <li>Make sure the campaign is live and the list is not archived.</li>
         <li>Do not share your API key publicly or in frontend code.</li>
       </ul>
+      <h4 className="font-semibold mb-2">API Responses</h4>
+  <ul className="list-disc list-inside space-y-1 text-sm">
+    <li><strong>200 OK</strong> – Request successful: Lead uploaded.</li>
+    <li><strong>400 Bad Request</strong> – Invalid payload (e.g., missing "email").</li>
+    <li><strong>401 Unauthorized</strong> – API key is missing or invalid.</li>
+    <li><strong>402 Payment Required</strong> – Upload limit exceeded, upgrade needed.</li>
+    <li><strong>403 Forbidden</strong> – API key is valid but lacks permission for this resource.</li>
+    <li><strong>404 Not Found</strong> – Resource (e.g. campaign ID) not found.</li>
+    <li><strong>422 Unprocessable Entity</strong> – Bad email format or semantically incorrect data.</li>
+    <li><strong>429 Too Many Requests</strong> – Rate limit exceeded. Wait and retry.</li>
+    <li><strong>500 Internal Server Error</strong> – Instantly server error. Try again later.</li>
+  </ul>
+
     </div>
   </div>
 </TabsContent>
@@ -327,6 +340,20 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
         <li>If the key stops working, recheck the Developer API section for a refreshed key.</li>
         <li>Do not expose your key in public environments or client-side code.</li>
       </ul>
+      <TabsContent value="verifier">
+  <h4 className="font-semibold mb-2">API Responses</h4>
+  <ul className="list-disc list-inside space-y-1 text-sm">
+    <li><strong>200 OK</strong> – Email successfully verified (e.g. <code>"result": "valid"</code>).</li>
+    <li><strong>400 Bad Request</strong> – Invalid email format or missing parameters.</li>
+    <li><strong>401 Unauthorized</strong> – Missing or invalid API key.</li>
+    <li><strong>402 Payment Required</strong> – Not enough verification credits. Top up required.</li>
+    <li><strong>403 Forbidden</strong> – Key exists but doesn't have access (e.g. disabled).</li>
+    <li><strong>422 Unprocessable Entity</strong> – Cannot verify email at this time.</li>
+    <li><strong>429 Too Many Requests</strong> – You're sending too many requests too fast.</li>
+    <li><strong>500 Internal Server Error</strong> – MillionVerifier backend issue. Try again later.</li>
+  </ul>
+</TabsContent>
+
     </div>
   </div>
 </TabsContent>
@@ -453,6 +480,19 @@ CREATE TABLE settings (
         <li>Use RLS (Row-Level Security) only if you configure user auth — otherwise disable it.</li>
         <li>Monitor API usage in the Supabase dashboard to avoid rate limits.</li>
       </ul>
+      <h4 className="font-semibold mb-2">API Responses</h4>
+  <ul className="list-disc list-inside space-y-1 text-sm">
+    <li><strong>200 OK</strong> – Successful response from Supabase Auth, Storage, or Database API.</li>
+    <li><strong>400 Bad Request</strong> – Malformed request or missing fields (e.g. email required, invalid syntax).</li>
+    <li><strong>401 Unauthorized</strong> – Missing or invalid JWT/token. Used for endpoints requiring auth.</li>
+    <li><strong>402 Payment Required</strong> – Project quota exceeded (e.g. free plan limit reached).</li>
+    <li><strong>403 Forbidden</strong> – Access denied due to Row Level Security (RLS) or missing permissions.</li>
+    <li><strong>404 Not Found</strong> – Table, record, or resource not found.</li>
+    <li><strong>422 Unprocessable Entity</strong> – Semantic issue with input (e.g. JSON syntax valid but logic is bad).</li>
+    <li><strong>429 Too Many Requests</strong> – Rate limit hit. Supabase is throttling your requests.</li>
+    <li><strong>500 Internal Server Error</strong> – Server-side issue on Supabase. Retry later.</li>
+  </ul>
+
     </div>
   </div>
 </TabsContent>
