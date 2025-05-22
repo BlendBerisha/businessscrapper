@@ -156,6 +156,24 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
         <li>Ensure your bot is invited to the target Slack channel using <code>/invite @your-bot-name</code>.</li>
         <li>If you rotate your token, be sure to update it here immediately.</li>
       </ul>
+      <h4 className="font-semibold mb-2">API Responses</h4>
+  <ul className="list-disc list-inside space-y-1 text-sm">
+    <li><strong>200 OK</strong> – Request was successful. Payload contains <code>"ok": true</code>.</li>
+    <li><strong>200 OK + "ok": false</strong> – Slack-specific error returned:</li>
+    <ul className="list-disc ml-6 space-y-1">
+      <li><code>invalid_auth</code> – Bad or expired token.</li>
+      <li><code>channel_not_found</code> – Channel ID is incorrect or bot not added.</li>
+      <li><code>not_in_channel</code> – Bot must be in the channel to post.</li>
+      <li><code>missing_scope</code> – OAuth scope not granted (e.g. <code>chat:write</code>).</li>
+      <li><code>rate_limited</code> – Too many requests. Back off and retry after header timeout.</li>
+      <li><code>is_archived</code> – Channel is archived.</li>
+      <li><code>internal_error</code> – Slack internal error.</li>
+    </ul>
+    <li><strong>401 Unauthorized</strong> – Rare, typically only in OAuth flows without token.</li>
+    <li><strong>429 Too Many Requests</strong> – Rate limit exceeded. Includes <code>Retry-After</code> header.</li>
+    <li><strong>500 Internal Server Error</strong> – Slack server-side issue. Retry recommended.</li>
+  </ul>
+
     </div>
   </div>
 </TabsContent>
