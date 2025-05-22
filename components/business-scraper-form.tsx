@@ -645,6 +645,25 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
   return skipTime
 }
 
+const handleTogglePause = async (id: string, currentState: boolean) => {
+  const { error } = await supabase
+    .from("recurring_scrapes")
+    .update({ paused: !currentState })
+    .eq("id", id)
+
+  if (error) {
+    console.error("Failed to toggle pause state:", error.message)
+    toast({
+      title: "Error",
+      description: "Failed to update pause state.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  // Refresh UI
+  fetchRecurringSchedules().then(setRecurringSchedules)
+}
 
   return (
     
@@ -1189,6 +1208,15 @@ const calculateNextSkipTime = async (businessType: string): Promise<number> => {
                   <td className="px-4 py-2">{schedule.record_limit ?? "-"}</td>
                   <td className="px-4 py-2">{schedule.skip_times ?? "-"}</td>
                   <td className="px-4 py-2">
+                    <Button
+  variant={schedule.paused ? "default" : "secondary"}
+  size="sm"
+  onClick={() => handleTogglePause(schedule.id, schedule.paused)}
+  className="px-2 py-1 mr-2"
+>
+  {schedule.paused ? "Start" : "Pause"}
+</Button>
+
                     <Button
                       variant="destructive"
                       size="sm"
