@@ -848,6 +848,7 @@ const handleTogglePause = async (id: string, currentState: boolean) => {
 
 
                     <p className="text-xs text-gray-500">Number of records per API request</p>
+                    <p className="text-xs text-red-500">Note that there is a 50K Limit to this</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="skipTimes">Skip Times</Label>
