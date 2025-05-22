@@ -17,12 +17,13 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
         </DialogHeader>
 
         <Tabs defaultValue="targetron" className="w-full mt-4">
-          <TabsList className="grid grid-cols-6">
+          <TabsList className="grid grid-cols-7">
             <TabsTrigger value="targetron">Targetron</TabsTrigger>
             <TabsTrigger value="slack">Slack</TabsTrigger>
             <TabsTrigger value="instantly">Instantly</TabsTrigger>
             <TabsTrigger value="verifier">Million Verifier</TabsTrigger>
             <TabsTrigger value="supabase">Supabase</TabsTrigger>
+            <TabsTrigger value="netlify">Netlify</TabsTrigger>
             <TabsTrigger value="scraping">Start Scraping</TabsTrigger>
           </TabsList>
           <TabsContent value="targetron">
@@ -421,6 +422,75 @@ CREATE TABLE settings (
         <li>Only use <code>anon</code> keys in your frontend app.</li>
         <li>Use RLS (Row-Level Security) only if you configure user auth — otherwise disable it.</li>
         <li>Monitor API usage in the Supabase dashboard to avoid rate limits.</li>
+      </ul>
+    </div>
+  </div>
+</TabsContent>
+<TabsContent value="netlify">
+  <div className="text-sm text-muted-foreground space-y-4">
+    <div>
+      <p className="font-semibold mb-1">🚀 Netlify Setup & Debugging Guide</p>
+      <p>
+        Netlify hosts your frontend and connects it to APIs and Supabase. Here's how to deploy, debug, and monitor it effectively.
+      </p>
+    </div>
+
+    <div>
+      <p className="font-semibold">1. Local Development</p>
+      <ul className="list-disc list-inside">
+        <li>Run the app locally using <code>npm run dev</code> or <code>yarn dev</code>.</li>
+        <li>This uses the <strong>.env</strong> file located at the root of your project.</li>
+        <li>Make sure all required variables are present: <code>SUPABASE_URL</code>, <code>SUPABASE_ANON_KEY</code>, etc.</li>
+      </ul>
+    </div>
+
+    <div>
+      <p className="font-semibold">2. Deploying to Netlify</p>
+      <ol className="list-decimal list-inside space-y-1">
+        <li>Push your project to GitHub.</li>
+        <li>Connect your GitHub repo to Netlify via the Netlify dashboard.</li>
+        <li>Set your build command to <code>npm run build</code> and publish directory to <code>.next</code> or <code>out</code> depending on your framework.</li>
+        <li>Set environment variables from your local <code>.env</code> into Netlify: go to <strong>Site settings → Environment Variables</strong>.</li>
+      </ol>
+    </div>
+
+    <div>
+      <p className="font-semibold">3. Debugging & Logs</p>
+      <ul className="list-disc list-inside">
+        <li>Go to your site → <strong>Deploys</strong> tab → click on the latest deploy → <strong>View logs</strong></li>
+        <li>This will show you build errors, runtime exceptions, and console logs</li>
+        <li>You can also add <code>console.log()</code> in your app to debug in Netlify Functions or static render.</li>
+      </ul>
+    </div>
+
+    <div>
+      <p className="font-semibold">4. Common Errors</p>
+      <ul className="list-disc list-inside space-y-2">
+        <li>
+          <strong>503 – API Service Unavailable:</strong><br />
+          This usually means your backend (like Targetron or Supabase) is either down, blocking the request, or hit rate limits.
+        </li>
+        <li>
+          <strong>Failed to load resource (CORS):</strong><br />
+          Your external API is not allowing calls from your Netlify domain. Fix by adjusting CORS headers.
+        </li>
+        <li>
+          <strong>Missing environment variables:</strong><br />
+          You may see undefined values or fetch errors — confirm Netlify env vars match your local <code>.env</code>.
+        </li>
+        <li>
+          <strong>Runtime errors (undefined, null, etc.):</strong><br />
+          Check your browser console and Netlify logs to trace back.
+        </li>
+      </ul>
+    </div>
+
+    <div>
+      <p className="font-semibold text-red-600">✅ Best Practices</p>
+      <ul className="list-disc list-inside">
+        <li>Deploy preview builds from branches before merging to main.</li>
+        <li>Use Netlify Functions if you need server-side logic with secrets (like Telegram API, custom scrapers).</li>
+        <li>Always test new features locally with <code>npm run dev</code> before deploying.</li>
       </ul>
     </div>
   </div>
