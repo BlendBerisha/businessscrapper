@@ -70,10 +70,21 @@ export function HelpDialog({ open, onOpenChange }: HelpDialogProps) {
     <div>
       <p className="font-semibold text-red-600">⚠️ Important Notes</p>
       <ul className="list-disc list-inside space-y-1">
-        <li>Keep your API key private and secure.</li>
-        <li>Never expose it in public GitHub repos or frontend code.</li>
-        <li>If compromised, revoke it immediately and generate a new one.</li>
-      </ul>
+  <li>Keep your API key private and secure.</li>
+  <li>Never expose it in public GitHub repos or frontend code.</li>
+  <li>If compromised, revoke it immediately and generate a new one.</li>
+</ul>
+
+<div className="mt-4">
+  <h4 className="font-semibold mb-2">Responses</h4>
+  <ul className="list-disc list-inside space-y-1">
+    <li><strong>200</strong> – The response contains the status and estimated number of results (`total`) that can be fetched with the `/data/places` endpoint.</li>
+    <li><strong>401</strong> – Wrong or missing API Key (token).</li>
+    <li><strong>402</strong> – Not enough credits.</li>
+    <li><strong>422</strong> – Wrong query URL parameters.</li>
+  </ul>
+</div>
+
     </div>
   </div>
 </TabsContent>
@@ -383,7 +394,7 @@ CREATE TABLE scrape_queue (
       <details className="border rounded p-2 bg-gray-50">
         <summary className="cursor-pointer font-medium">recurring_scrapes</summary>
         <pre className="text-xs mt-2 overflow-x-auto">
-CREATE TABLE recurring_scrapes (
+        CREATE TABLE recurring_scrapes (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   recurring_days text[] NOT NULL,
   hour integer NOT NULL,
@@ -400,7 +411,8 @@ CREATE TABLE recurring_scrapes (
   created_at timestamptz DEFAULT now(),
   with_phone boolean DEFAULT true,
   without_phone boolean DEFAULT false,
-  enrich_with_area_codes boolean DEFAULT false
+  enrich_with_area_codes boolean DEFAULT false,
+  paused boolean DEFAULT false
 );
         </pre>
       </details>
