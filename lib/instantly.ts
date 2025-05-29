@@ -1,6 +1,5 @@
 import { getNormalizedColumn } from "@/lib/utils" // make sure path is correct
 
-
 export interface InstantlyCredentials {
   apiKey: string
   listId: string
@@ -102,6 +101,7 @@ export class InstantlyAPI {
       email_first_name: first_name,
       email_last_name: last_name,
       is_email_valid: custom_variables?.is_email_valid || false,
+      enrich_area_codes: extra_fields["enrich area codes"] || "", // ← keep this
     })
 
     const leadPayload = {
@@ -151,26 +151,13 @@ export class InstantlyAPI {
 
     console.log(`📥 Preparing upload of leads to Instantly...`)
 
-    let injectedIndex = 0
-
     for (const row of data) {
       for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
         const email = row[emailKey]?.trim()
         if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
-
-        // Inject testing values manually for first 5
-        if (injectedIndex < 2) {
-          row.is_email_valid = "TRUE"
-        } else if (injectedIndex < 5) {
-          row.is_email_valid = "FALSE"
-        } else {
-          continue
-        }
-
-        injectedIndex++
-        seenEmails.add(email)
-
         if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
+
+        seenEmails.add(email)
 
         const lead = {
           email,
@@ -189,8 +176,6 @@ export class InstantlyAPI {
             enrich_area_codes: row["enrich area codes"] || ""
           },
         }
-
-        console.log("enrich_area_codes", lead.custom_variables.enrich_area_codes)
 
         const success = await this.addLead(lead)
         if (success) successful.push(email)
