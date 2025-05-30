@@ -251,16 +251,16 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
   for (let i = 0; i < dfWith.length; i++) {
     const row = dfWith[i]
     const email = row["email"]?.trim()
-
+  
     if (email) {
       try {
         const result = await verifyEmailViaRoute(email, apiKey)
-        row["is_email_valid"] = result.status === "valid"
-        console.log("📧 Verified", email, "→", result.status, "→ is_email_valid =", result.status === "valid")
+        row["is_email_valid"] = result.quality !== "risky"
+        console.log("📧 Verified", email, "→", result.quality, "→ is_email_valid =", result.quality !== "risky")
         row["email_result"] = result.result
         row["email_quality"] = result.quality
         row["email_resultcode"] = result.resultcode
-              } catch (err) {
+      } catch (err) {
         console.error(`❌ Verification failed for ${email}`, err)
         row["is_email_valid"] = false
       }
@@ -268,7 +268,7 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
       row["is_email_valid"] = false
     }
   }
-
+  
   if (dfNo.length > 0) {
     dfNo.forEach(row => {
       row["is_email_valid"] = false
