@@ -8,7 +8,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-export async function verifyEmails(businessData: any[]) {
+export async function verifyEmails(businessData: any[], apiKey?: string) {
   // Step 1: Get settings from Supabase
   const { data, error } = await supabase
     .from("settings")
@@ -21,10 +21,9 @@ export async function verifyEmails(businessData: any[]) {
     throw new Error("Could not retrieve Million Verifier API key from Supabase")
   }
 
-  const apiKey = data.value.millionApiKey
+  const resolvedApiKey = apiKey || data.value.millionApiKey
 
-  // ✅ Log the API key to console
-  console.log("🔐 Million Verifier API Key:", apiKey)
+  console.log("🔐 Using Million Verifier API Key:", resolvedApiKey)
 
   // Step 2: Clone and validate business data
   const verifiedData = [...businessData]
@@ -37,18 +36,18 @@ export async function verifyEmails(businessData: any[]) {
 
       if (email && typeof email === "string" && email.includes("@")) {
         try {
-          const isValid = await verifyEmailWithMillionVerifier(email, apiKey)
+          const isValid = await verifyEmailWithMillionVerifier(email, resolvedApiKey)
 
           if (isValid) {
             item.is_email_valid = true
-            item.email = email // Use the verified one
+            item.email = email
             break
           }
         } catch (err) {
           console.error(`❌ Verification error for ${email}:`, err)
         }
 
-        await new Promise((r) => setTimeout(r, 300)) // Throttle
+        await new Promise((r) => setTimeout(r, 300))
       }
     }
   }
