@@ -11,16 +11,16 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 export async function verifyEmails(businessData: any[], apiKey?: string) {
   // Step 1: Get settings from Supabase
   const { data, error } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "scrapperSettings")
-    .single()
+  .from("settings")
+  .select("value")
+  .eq("key", "scrapperSettings")
+  .maybeSingle()
 
-  if (error || !data?.value?.millionApiKey) {
-    console.error("❌ Error loading API key:", error)
+  if (!data || !data.value?.millionApiKey) {
+    console.error("❌ Million API key missing in settings row or settings row not found")
     throw new Error("Could not retrieve Million Verifier API key from Supabase")
   }
-
+  
   const resolvedApiKey = apiKey || data.value.millionApiKey
 
   console.log("🔐 Using Million Verifier API Key:", resolvedApiKey)
