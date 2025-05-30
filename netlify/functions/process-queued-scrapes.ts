@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ✅ Helper: Fetch business data (with estimate check and timeout)
+// ✅ Helper: Fetch business data
 async function fetchBusinessData(params: {
   apiKey: string
   country: string
@@ -48,7 +48,7 @@ async function fetchBusinessData(params: {
     throw new Error(`Estimate failed or no data found. Status: ${estimateRes.status}, Total: ${total}`)
   }
 
-  // 2️⃣ Fetch full data (with separate timeout)
+  // 2️⃣ Fetch full data
   const fetchController = new AbortController()
   const fetchTimer = setTimeout(() => fetchController.abort(), timeoutMs)
 
@@ -115,8 +115,12 @@ const handler: Handler = async () => {
 
     const settings = settingsData[0].value
     const apiKey = settings.targetronApiKey?.trim()
+    const mvKey = settings.millionVerifierApiKey?.trim()
     if (!apiKey) throw new Error("Missing Targetron API key in settings")
-    console.log("🔐 Using API key:", apiKey.slice(0, 6) + "...")
+    if (!mvKey) throw new Error("Missing MillionVerifier API key in settings")
+
+    console.log("🔐 Using Targetron API key:", apiKey.slice(0, 6) + "...")
+    console.log("🔐 Using MillionVerifier API key:", mvKey.slice(0, 6) + "...")
 
     let businessData = null
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -144,6 +148,29 @@ const handler: Handler = async () => {
       console.log("🟡 No data found.")
       await supabase.from("scrape_queue").update({ status: "no_results" }).eq("id", job.id)
       return { statusCode: 200, body: "No data found." }
+    }
+
+    // ✅ Add MillionVerifier verification here
+    for (const row of businessData) {
+      const email = row.email
+      if (email) {
+        try {
+          const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
+          const res = await fetch(verifyUrl)
+          const json = await res.json()
+
+          const result = json.result?.toLowerCase?.()
+          row.is_email_valid = ["valid", "ok", "catch_all"].includes(result)
+          row.email_result = result
+          row.email_quality = json.quality
+          row.email_resultcode = json.resultcode
+        } catch (err) {
+          console.error(`❌ Verification failed for ${email}`, err)
+          row.is_email_valid = false
+        }
+      } else {
+        row.is_email_valid = false
+      }
     }
 
     const sheet = XLSX.utils.json_to_sheet(businessData)
