@@ -3,23 +3,12 @@ import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
 import { supabase } from "../../lib/supabase"
 
-// ✅ Admin client for storage uploads
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ✅ Helper: Fetch business data
-async function fetchBusinessData(params: {
-  apiKey: string
-  country: string
-  city: string
-  state?: string
-  postalCode?: string
-  businessType: string
-  limit: number
-  skipTimes?: number
-}) {
+async function fetchBusinessData(params: any) {
   const timeoutMs = 5000
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -32,7 +21,6 @@ async function fetchBusinessData(params: {
     type: params.businessType,
   })
 
-  // 1️⃣ Estimate check
   const estimateUrl = `https://dahab.app.outscraper.com/estimate/places?${baseQuery.toString()}`
   const estimateRes = await fetch(estimateUrl, {
     method: "GET",
@@ -43,39 +31,30 @@ async function fetchBusinessData(params: {
 
   const estimateData = await estimateRes.json()
   const total = estimateData?.total || 0
-
   if (!estimateRes.ok || total === 0) {
     throw new Error(`Estimate failed or no data found. Status: ${estimateRes.status}, Total: ${total}`)
   }
 
-  // 2️⃣ Fetch full data
   const fetchController = new AbortController()
   const fetchTimer = setTimeout(() => fetchController.abort(), timeoutMs)
 
-  const fullQuery = baseQuery
-  fullQuery.set("limit", String(params.limit))
-  fullQuery.set("skip", String(((params.skipTimes || 1) - 1) * params.limit))
+  baseQuery.set("limit", String(params.limit))
+  baseQuery.set("skip", String(((params.skipTimes || 1) - 1) * params.limit))
 
-  const url = `https://dahab.app.outscraper.com/data/places?${fullQuery.toString()}`
+  const url = `https://dahab.app.outscraper.com/data/places?${baseQuery.toString()}`
   const res = await fetch(url, {
     method: "GET",
-    headers: {
-      "X-API-KEY": params.apiKey,
-    },
+    headers: { "X-API-KEY": params.apiKey },
     signal: fetchController.signal,
   })
   clearTimeout(fetchTimer)
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`API request failed with status ${res.status}: ${text}`)
-  }
+  if (!res.ok) throw new Error(`API request failed with status ${res.status}`)
 
   const json = await res.json()
   return json.data
 }
 
-// ✅ Main handler
 const handler: Handler = async () => {
   const { data: jobs, error } = await supabase
     .from("scrape_queue")
@@ -86,15 +65,11 @@ const handler: Handler = async () => {
 
   if (error || !jobs || jobs.length === 0) {
     console.log("🟡 No pending jobs or error fetching queue:", error)
-
-    // ⏱️ Cleanup stale running jobs (older than 30m)
-    const cleanup = await supabase
+    await supabase
       .from("scrape_queue")
       .update({ status: "failed", error: "Timed out after 30m" })
       .lt("updated_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
-      .eq("status", "running") as { data: { id: string }[] | null, error: any }
-
-    console.log("🧹 Cleaned up stuck jobs:", cleanup.data ? cleanup.data.length : 0)
+      .eq("status", "running")
     return { statusCode: 200, body: "No pending jobs." }
   }
 
@@ -109,18 +84,13 @@ const handler: Handler = async () => {
       .eq("key", "scraperSettings")
       .limit(1)
 
-    if (settingsError || !settingsData?.[0]?.value) {
-      throw new Error("Failed to fetch scraper settings")
-    }
+    if (settingsError || !settingsData?.[0]?.value) throw new Error("Failed to fetch scraper settings")
 
     const settings = settingsData[0].value
     const apiKey = settings.targetronApiKey?.trim()
     const mvKey = settings.millionVerifierApiKey?.trim()
     if (!apiKey) throw new Error("Missing Targetron API key in settings")
     if (!mvKey) throw new Error("Missing MillionVerifier API key in settings")
-
-    console.log("🔐 Using Targetron API key:", apiKey.slice(0, 6) + "...")
-    console.log("🔐 Using MillionVerifier API key:", mvKey.slice(0, 6) + "...")
 
     let businessData = null
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -145,12 +115,10 @@ const handler: Handler = async () => {
     }
 
     if (!businessData?.length) {
-      console.log("🟡 No data found.")
       await supabase.from("scrape_queue").update({ status: "no_results" }).eq("id", job.id)
       return { statusCode: 200, body: "No data found." }
     }
 
-    // ✅ Add MillionVerifier verification here
     for (const row of businessData) {
       const email = row.email
       if (email) {
@@ -158,21 +126,20 @@ const handler: Handler = async () => {
           const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
           const res = await fetch(verifyUrl)
           const json = await res.json()
-        
-          const result = json.result?.toLowerCase?.() ?? ""
-          const quality = json.quality?.toLowerCase?.() ?? "unknown"
-        
+
+          const result = json.result?.toLowerCase?.() || ""
+          const quality = json.quality?.toLowerCase?.() || "unknown"
+
           row.is_email_valid = quality !== "risky" && quality !== "unknown"
           row.email_result = result
           row.email_quality = quality
           row.email_resultcode = json.resultcode
-        
+
           console.log(`✅ Email: ${email}, Quality: ${quality}, Result: ${result}, is_email_valid: ${row.is_email_valid}`)
         } catch (err) {
           console.error(`❌ Verification failed for ${email}`, err)
           row.is_email_valid = false
         }
-        
       } else {
         row.is_email_valid = false
       }
@@ -192,7 +159,6 @@ const handler: Handler = async () => {
       })
 
     if (uploadError) {
-      console.error("❌ Upload error", uploadError)
       await supabase.from("scrape_queue").update({ status: "failed" }).eq("id", job.id)
       return { statusCode: 500, body: "Upload failed." }
     }
@@ -202,21 +168,14 @@ const handler: Handler = async () => {
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("id", job.id)
 
-    return {
-      statusCode: 200,
-      body: `✅ Scrape job ${job.id} completed and stored.`,
-    }
+    return { statusCode: 200, body: `✅ Scrape job ${job.id} completed and stored.` }
   } catch (err: any) {
     console.error("❌ Job failed:", err.message)
     await supabase
       .from("scrape_queue")
       .update({ status: "failed", error: err.message })
       .eq("id", job.id)
-
-    return {
-      statusCode: 500,
-      body: `❌ Scrape failed: ${err.message}`,
-    }
+    return { statusCode: 500, body: `❌ Scrape failed: ${err.message}` }
   }
 }
 
