@@ -160,11 +160,13 @@ const handler: Handler = async () => {
           const json = await res.json()
 
           const result = json.result?.toLowerCase?.()
-          row.is_email_valid = ["valid", "ok", "catch_all"].includes(result)
+          const quality = json.quality?.toLowerCase?.()
+          
+          row.is_email_valid = quality !== "risky"
           row.email_result = result
-          row.email_quality = json.quality
+          row.email_quality = quality
           row.email_resultcode = json.resultcode
-        } catch (err) {
+                  } catch (err) {
           console.error(`❌ Verification failed for ${email}`, err)
           row.is_email_valid = false
         }
