@@ -56,6 +56,11 @@ export async function loadEnrichAreaCodesFromURL(url: string = "/enrich-area-cod
 
 // Converts JSON and downloads enriched Excel with email separation
 export function convertJsonToCsv(jsonData: any[], filename: string) {
+  console.log("🧪 Sample jsonData before separating:", jsonData.slice(0, 5).map(row => ({
+    email: row.email,
+    is_email_valid: row.is_email_valid
+  })))
+  
   if (!isBrowser()) return
 
   const columnOrder = [
@@ -158,9 +163,15 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
         newRow.email_last_name = entryCopy[lastNameKey] || ""
         emailGroups.forEach(group => group.forEach(key => delete newRow[key]))
         withEmails.push(newRow)
+    
+        // ✅ Safe logging right here
+        console.log("✅ Adding to withEmails:", {
+          email: newRow.email,
+          is_email_valid: newRow.is_email_valid
+        })
       }
     }
-
+    
     if (!hasEmail) {
       emailGroups.forEach(group => group.forEach(key => delete entryCopy[key]))
       entryCopy.email = ""
@@ -256,6 +267,7 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
       try {
         const result = await verifyEmailViaRoute(email, apiKey)
         row["is_email_valid"] = result.status === "valid"
+        console.log("📧 Verified", email, "→", result.status, "→ is_email_valid =", result.status === "valid")
         row["email_result"] = result.result
         row["email_quality"] = result.quality
         row["email_resultcode"] = result.resultcode
@@ -313,6 +325,7 @@ async function verifyEmailViaRoute(email: string, apiKey: string): Promise<Email
   if (!res.ok || !result?.status) {
     throw new Error("Invalid response from email verification API")
   }
+  console.log("🎯 API response for", email, "=", result)
 
   return result
 }
