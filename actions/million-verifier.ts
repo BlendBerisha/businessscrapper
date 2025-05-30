@@ -33,24 +33,23 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
 
     for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
       const email = item[emailField]
-
       if (email && typeof email === "string" && email.includes("@")) {
         try {
           const isValid = await verifyEmailWithMillionVerifier(email, resolvedApiKey)
-
           if (isValid) {
             item.is_email_valid = true
             item.email = email
-            break
           }
+          // Save per field
+          const key = `is_email_valid${emailField === "email" ? "" : "_" + emailField.split("_")[1]}`
+          item[key] = isValid
         } catch (err) {
-          console.error(`❌ Verification error for ${email}:`, err)
+          console.error(`:x: Verification error for ${email}:`, err)
         }
-
         await new Promise((r) => setTimeout(r, 300))
       }
     }
-  }
+      }
 
   return verifiedData
 }

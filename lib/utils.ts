@@ -160,7 +160,7 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
         newRow.email = emailValue
         newRow.email_title = entryCopy[titleKey] || ""
         newRow.email_first_name = entryCopy[firstNameKey] || ""
-        newRow.email_last_name = entryCopy[lastNameKey] || ""
+        newRow.is_email_valid = entryCopy[`is_email_valid_${emailKey.split("_")[1]}`] || false
         emailGroups.forEach(group => group.forEach(key => delete newRow[key]))
         withEmails.push(newRow)
     
