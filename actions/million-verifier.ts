@@ -23,6 +23,9 @@ export async function verifyEmails(businessData: any[]) {
 
   const apiKey = data.value.millionApiKey
 
+  // ✅ Log the API key to console
+  console.log("🔐 Million Verifier API Key:", apiKey)
+
   // Step 2: Clone and validate business data
   const verifiedData = [...businessData]
 
