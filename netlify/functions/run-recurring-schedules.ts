@@ -28,9 +28,9 @@ interface MillionVerifierResponse {
 const verifyEmail = async (email: string, apiKey: string): Promise<boolean> => {
   try {
     const { data } = await axios.get<MillionVerifierResponse>(
-      `https://api.millionverifier.com/api/v2/${apiKey}/verify/${encodeURIComponent(email)}`
+      `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}`
     )
-    return data.status === "ok" && data.result === "valid"
+        return data.status === "ok" && data.result === "valid"
   } catch (error) {
     console.error("❌ Email verification error for:", email, error)
     return false
