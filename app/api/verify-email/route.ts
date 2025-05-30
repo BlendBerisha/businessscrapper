@@ -23,8 +23,9 @@ export async function POST(req: Request) {
     console.log(`📨 Response for ${email}:`, JSON.stringify(json, null, 2))
 
     const rawResult = json?.result?.toLowerCase?.() || ""
-    const status = ["valid", "catch_all"].includes(rawResult) ? "valid" : "invalid"
-
+    const status = ["valid", "catch_all", "ok"].includes(rawResult) ? "valid" : "invalid"
+    
+    
     return NextResponse.json({
       status,
       result: rawResult,
