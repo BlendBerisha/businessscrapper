@@ -17,8 +17,11 @@ export async function POST(req: Request) {
     }
 
     const json = await res.json()
-    const status = json?.result?.toLowerCase?.() === "valid" ? "valid" : "invalid"
-
+    const status =
+    ["valid", "catch_all"].includes(json?.result?.toLowerCase?.())
+      ? "valid"
+      : "invalid"
+  
     return NextResponse.json({ status }) // ✅ Unified structure
   } catch (err) {
     console.error("❌ Error verifying email:", err)
