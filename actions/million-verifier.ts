@@ -1,18 +1,32 @@
 "use server"
 
+import { createClient } from "@supabase/supabase-js"
 import { verifyEmailWithMillionVerifier } from "@/lib/verify"
 
-export async function verifyEmails(businessData: any[], apiKey?: string) {
-  const MILLION_API_KEY = apiKey || process.env.MILLION_VERIFIER_KEY
+// Supabase config (replace with actual or use env vars)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient(supabaseUrl, supabaseKey)
 
-  if (!MILLION_API_KEY) {
-    throw new Error("Million API key is not configured")
+export async function verifyEmails(businessData: any[]) {
+  // Step 1: Get settings from Supabase
+  const { data, error } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "scrapperSettings")
+    .single()
+
+  if (error || !data?.value?.millionApiKey) {
+    console.error("❌ Error loading API key:", error)
+    throw new Error("Could not retrieve Million Verifier API key from Supabase")
   }
 
+  const apiKey = data.value.millionApiKey
+
+  // Step 2: Clone and validate business data
   const verifiedData = [...businessData]
 
   for (const item of verifiedData) {
-    let isValid = false
     item.is_email_valid = false
 
     for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
@@ -20,19 +34,18 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
 
       if (email && typeof email === "string" && email.includes("@")) {
         try {
-          const result = await verifyEmailWithMillionVerifier(email, MILLION_API_KEY)
+          const isValid = await verifyEmailWithMillionVerifier(email, apiKey)
 
-          if (result) {
-            isValid = true
+          if (isValid) {
             item.is_email_valid = true
-            item.email = email // ✅ critical
+            item.email = email // Use the verified one
             break
           }
-        } catch (error) {
-          console.error(`❌ Error verifying email ${email}:`, error)
+        } catch (err) {
+          console.error(`❌ Verification error for ${email}:`, err)
         }
 
-        await new Promise((r) => setTimeout(r, 300))
+        await new Promise((r) => setTimeout(r, 300)) // Throttle
       }
     }
   }
