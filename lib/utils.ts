@@ -253,8 +253,11 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
     if (email) {
       try {
         const result = await verifyEmailViaRoute(email, apiKey)
-        row["is_email_valid"] = result?.status === "valid"
-      } catch (err) {
+        row["is_email_valid"] = result.status === "valid"
+        row["email_result"] = result.result
+        row["email_quality"] = result.quality
+        row["email_resultcode"] = result.resultcode
+              } catch (err) {
         console.error(`❌ Verification failed for ${email}`, err)
         row["is_email_valid"] = false
       }
@@ -286,7 +289,17 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   })
 }
-async function verifyEmailViaRoute(email: string, apiKey: string): Promise<{ status: string }> {
+interface EmailVerificationResult {
+  status: string
+  result: string
+  quality: string
+  resultcode: number
+  free: boolean
+  role: boolean
+  email: string
+}
+
+async function verifyEmailViaRoute(email: string, apiKey: string): Promise<EmailVerificationResult> {
   const res = await fetch("/api/verify-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
