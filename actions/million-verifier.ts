@@ -8,39 +8,41 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-export async function verifyEmails(businessData: any[], apiKey?: string) {
-  const { data, error } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "scrapperSettings")
-    .maybeSingle()
-  if (!data || !data.value?.millionApiKey) {
-    console.error("❌ Million API key missing in settings row or settings row not found")
-    throw new Error("Could not retrieve Million Verifier API key from Supabase")
-  }
-  const resolvedApiKey = apiKey || data.value.millionApiKey
-  console.log("🔐 Using Million Verifier API Key:", resolvedApiKey)
-  const verifiedData = [...businessData]
-  for (const item of verifiedData) {
-    item.is_email_valid = false
-    for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
-      const email = item[emailField]
-      if (email && typeof email === "string" && email.includes("@")) {
-        try {
-          const isValid = await verifyEmailWithMillionVerifier(email, resolvedApiKey)
-          if (isValid) {
-            item.is_email_valid = true
-            item.email = email
-          }
-          // Save per-field validity
-          const index = emailField === "email" ? "0" : emailField.split("_")[1]
-          item[`is_email_valid_${index}`] = isValid
-        } catch (err) {
-          console.error(`❌ Verification error for ${email}:`, err)
-        }
-        await new Promise((r) => setTimeout(r, 300))
-      }
+export async function verifyEmails(
+  data: any[],
+  apiKey: string
+): Promise<any[]> {
+  const verified = []
+
+  for (const entry of data) {
+    const email = entry.email?.trim()
+    if (!email) {
+      entry.is_email_valid = false
+      verified.push(entry)
+      continue
     }
+
+    try {
+      const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(
+        apiKey
+      )}&email=${encodeURIComponent(email)}`
+      const res = await fetch(url)
+      const result = await res.json()
+
+      const isValid = result.quality !== "risky"
+
+      entry.is_email_valid = isValid
+      entry.email_result = result.result
+      entry.email_quality = result.quality
+      entry.email_resultcode = result.resultcode
+    } catch (err) {
+      console.error(`⚠️ Failed to verify email: ${email}`, err)
+      entry.is_email_valid = false
+      entry.email_result = "error"
+    }
+
+    verified.push(entry)
   }
-  return verifiedData
+
+  return verified
 }
