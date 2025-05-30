@@ -293,12 +293,14 @@ async function verifyEmailViaRoute(email: string, apiKey: string): Promise<{ sta
     body: JSON.stringify({ email, apiKey }),
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Backend error: ${err}`)
+  const result = await res.json()
+  console.log("📧 Verification result:", email, result)
+
+  if (!res.ok || !result?.status) {
+    throw new Error("Invalid response from API route")
   }
 
-  return await res.json()
+  return result
 }
 
 export function getNormalizedColumn(row: Record<string, any>, targetKey: string) {
