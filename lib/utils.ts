@@ -136,8 +136,10 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
     const postalKey = String(rawPostal).split(" ")[0].toUpperCase().trim()
     entryCopy["enrich area codes"] = enrichAreaCodeMap[postalKey] || ""
     
-    entryCopy.is_email_valid = entryCopy.is_email_valid || "FALSE"
-
+    if (typeof entryCopy.is_email_valid !== "boolean") {
+      entryCopy.is_email_valid = false
+    }
+    
     if (entryCopy.phone) {
       const phoneStr = String(entryCopy.phone)
       entryCopy.phone = phoneStr.startsWith("'") ? phoneStr : `'${phoneStr}`
@@ -307,10 +309,9 @@ async function verifyEmailViaRoute(email: string, apiKey: string): Promise<Email
   })
 
   const result = await res.json()
-  console.log("📧 Verification result:", email, result)
 
   if (!res.ok || !result?.status) {
-    throw new Error("Invalid response from API route")
+    throw new Error("Invalid response from email verification API")
   }
 
   return result

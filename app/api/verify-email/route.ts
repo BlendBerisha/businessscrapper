@@ -25,7 +25,6 @@ export async function POST(req: Request) {
     const rawResult = json?.result?.toLowerCase?.() || ""
     const status = ["valid", "catch_all", "ok"].includes(rawResult) ? "valid" : "invalid"
     
-    
     return NextResponse.json({
       status,
       result: rawResult,
@@ -35,7 +34,7 @@ export async function POST(req: Request) {
       role: json.role || false,
       email: json.email || email,
     })
-  } catch (err) {
+      } catch (err) {
     console.error("❌ Error verifying email:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
