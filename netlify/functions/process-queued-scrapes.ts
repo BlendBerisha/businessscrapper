@@ -158,18 +158,21 @@ const handler: Handler = async () => {
           const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
           const res = await fetch(verifyUrl)
           const json = await res.json()
-
-          const result = json.result?.toLowerCase?.()
-          const quality = json.quality?.toLowerCase?.()
-          
-          row.is_email_valid = quality !== "risky"
+        
+          const result = json.result?.toLowerCase?.() ?? ""
+          const quality = json.quality?.toLowerCase?.() ?? "unknown"
+        
+          row.is_email_valid = quality !== "risky" && quality !== "unknown"
           row.email_result = result
           row.email_quality = quality
           row.email_resultcode = json.resultcode
-                  } catch (err) {
+        
+          console.log(`✅ Email: ${email}, Quality: ${quality}, Result: ${result}, is_email_valid: ${row.is_email_valid}`)
+        } catch (err) {
           console.error(`❌ Verification failed for ${email}`, err)
           row.is_email_valid = false
         }
+        
       } else {
         row.is_email_valid = false
       }
