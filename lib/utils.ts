@@ -126,30 +126,20 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
   const withEmails: any[] = []
   const withoutEmails: any[] = []
   const seenEmails = new Set<string>()
-
   const emailGroups = [
     ["email_1", "email_1_title", "email_1_first_name", "email_1_last_name"],
     ["email_2", "email_2_title", "email_2_first_name", "email_2_last_name"],
     ["email_3", "email_3_title", "email_3_first_name", "email_3_last_name"],
   ]
-
   for (const entry of jsonData) {
     const entryCopy = { ...entry }
-
-    // Enrich area codes based on postal code
     const rawPostal = entryCopy.postal_code || ""
     const postalKey = String(rawPostal).split(" ")[0].toUpperCase().trim()
     entryCopy["enrich area codes"] = enrichAreaCodeMap[postalKey] || ""
-    
-    if (typeof entryCopy.is_email_valid !== "boolean") {
-      entryCopy.is_email_valid = false
-    }
-    
     if (entryCopy.phone) {
       const phoneStr = String(entryCopy.phone)
       entryCopy.phone = phoneStr.startsWith("'") ? phoneStr : `'${phoneStr}`
     }
-
     let hasEmail = false
     for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
       const emailValue = entryCopy[emailKey]
@@ -160,31 +150,27 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
         newRow.email = emailValue
         newRow.email_title = entryCopy[titleKey] || ""
         newRow.email_first_name = entryCopy[firstNameKey] || ""
-        newRow.is_email_valid = entryCopy[`is_email_valid_${emailKey.split("_")[1]}`] || false
+        newRow.email_last_name = entryCopy[lastNameKey] || ""
+        const index = emailKey.split("_")[1] // "1", "2", "3"
+        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] || false
         emailGroups.forEach(group => group.forEach(key => delete newRow[key]))
         withEmails.push(newRow)
-        const emailIndex = emailKey.split("_")[1] || "0"
-        newRow.is_email_valid = entryCopy[`is_email_valid_${emailIndex}`] || false
-        
-        console.log(`📧 Email: ${newRow.email} → Valid: ${newRow.is_email_valid}`)
-        // ✅ Safe logging right here
         console.log("✅ Adding to withEmails:", {
           email: newRow.email,
-          is_email_valid: newRow.is_email_valid
+          is_email_valid: newRow.is_email_valid,
         })
       }
     }
-    
     if (!hasEmail) {
       emailGroups.forEach(group => group.forEach(key => delete entryCopy[key]))
       entryCopy.email = ""
       entryCopy.email_title = ""
       entryCopy.email_first_name = ""
       entryCopy.email_last_name = ""
+      entryCopy.is_email_valid = false
       withoutEmails.push(entryCopy)
     }
   }
-
   return { withEmails, withoutEmails }
 }
 
