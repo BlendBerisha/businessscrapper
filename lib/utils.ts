@@ -152,7 +152,7 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
         newRow.email_first_name = entryCopy[firstNameKey] || ""
         newRow.email_last_name = entryCopy[lastNameKey] || ""
         const index = emailKey.split("_")[1] // "1", "2", "3"
-        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] || false
+        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] === true
         emailGroups.forEach(group => group.forEach(key => delete newRow[key]))
         withEmails.push(newRow)
         console.log("✅ Adding to withEmails:", {
@@ -255,7 +255,7 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
     if (email) {
       try {
         const result = await verifyEmailViaRoute(email, apiKey)
-        row["is_email_valid"] = result.quality !== "risky"
+        row["is_email_valid"] = result.result === "valid"
         console.log("📧 Verified", email, "→", result.quality, "→ is_email_valid =", result.quality !== "risky")
         row["email_result"] = result.result
         row["email_quality"] = result.quality
