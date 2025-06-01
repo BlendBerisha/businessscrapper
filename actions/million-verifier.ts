@@ -14,33 +14,46 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
     .select("value")
     .eq("key", "scrapperSettings")
     .maybeSingle()
+
   if (!data || !data.value?.millionApiKey) {
     console.error("❌ Million API key missing in settings row or settings row not found")
     throw new Error("Could not retrieve Million Verifier API key from Supabase")
   }
+
   const resolvedApiKey = apiKey || data.value.millionApiKey
   console.log("🔐 Using Million Verifier API Key:", resolvedApiKey)
+
   const verifiedData = [...businessData]
+
   for (const item of verifiedData) {
-    item.is_email_valid = false
+    let hasValidEmail = false
+
     for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
       const email = item[emailField]
+
       if (email && typeof email === "string" && email.includes("@")) {
         try {
           const isValid = await verifyEmailWithMillionVerifier(email, resolvedApiKey)
-          if (isValid) {
-            item.is_email_valid = true
-            item.email = email
-          }
+
           // Save per-field validity
           const index = emailField === "email" ? "0" : emailField.split("_")[1]
           item[`is_email_valid_${index}`] = isValid
+
+          // Set main valid email only once
+          if (isValid && !hasValidEmail) {
+            hasValidEmail = true
+            item.email = email
+          }
         } catch (err) {
           console.error(`❌ Verification error for ${email}:`, err)
         }
+
         await new Promise((r) => setTimeout(r, 300))
       }
     }
+
+    item.is_email_valid = hasValidEmail
   }
+
   return verifiedData
 }
