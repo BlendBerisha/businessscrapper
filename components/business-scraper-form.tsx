@@ -684,18 +684,16 @@ async function handleEmailFileVerification(file: File) {
   const emails = json.map(row => row.email).filter(email => typeof email === "string" && email.includes("@"))
 
   const results: { email: string, is_email_valid: boolean }[] = []
+  const apiKey = "awnUgysVJ3yFdgscOGJomZpGa" // Replace with actual key or env var
 
   for (const email of emails) {
     try {
-      const response = await fetch("https://api.usemillion.com/email/verify", {
+      const response = await fetch("/api/verify-email", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${formData.millionApiKey}`,
-        },
-        body: JSON.stringify({ email }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, apiKey }),
       })
-      const result = await response.json()
+            const result = await response.json()
       results.push({
         email,
         is_email_valid: ["ok", "valid"].includes(result.result) && result.quality !== "risky",

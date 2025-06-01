@@ -8,34 +8,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing email or API key" }, { status: 400 })
     }
 
-    const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}`
+    const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}&timeout=10`
     const res = await fetch(url)
 
     if (!res.ok) {
-      const errorText = await res.text()
-      return NextResponse.json({ error: `Verification failed: ${errorText}` }, { status: 500 })
+      const text = await res.text()
+      return NextResponse.json({ error: text }, { status: res.status })
     }
 
-    const json = await res.json()
-    const result = json?.result?.toLowerCase?.() || ""
-    const quality = json?.quality?.toLowerCase?.() || ""
-
-    const isValid = (
-      ["ok", "valid"].includes(result) &&
-      ["good", "medium"].includes(quality)
-    )
+    const result = await res.json()
 
     return NextResponse.json({
-      status: isValid ? "valid" : "invalid",
-      is_email_valid: isValid,
-      result,
-      quality,
-      resultcode: json.resultcode || 0,
-      free: json.free || false,
-      role: json.role || false,
-      email: json.email || email,
+      email: result.email,
+      result: result.result,
+      quality: result.quality,
+      resultcode: result.resultcode,
+      subresult: result.subresult,
+      free: result.free,
+      role: result.role,
+      error: result.error,
     })
   } catch (err) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
