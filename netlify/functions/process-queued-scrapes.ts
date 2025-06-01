@@ -120,28 +120,39 @@ const handler: Handler = async () => {
     }
 
     for (const row of businessData) {
-      const email = row.email
-      if (email) {
-        try {
-          const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
-          const res = await fetch(verifyUrl)
-          const json = await res.json()
+      const emailFields = ['email', 'email_1', 'email_2', 'email_3']
+      let isVerified = false
 
-          const result = json.result?.toLowerCase?.() || ""
-          const quality = json.quality?.toLowerCase?.() || "unknown"
+      for (const field of emailFields) {
+        const email = row[field]
+        if (email) {
+          try {
+            const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
+            const res = await fetch(verifyUrl)
+            const json = await res.json()
 
-          row.is_email_valid = quality !== "risky" && quality !== "unknown"
-          row.email_result = result
-          row.email_quality = quality
-          row.email_resultcode = json.resultcode
+            const result = json.result?.toLowerCase?.() || ""
+            const quality = json.quality?.toLowerCase?.() || "unknown"
 
-          console.log(`✅ Email: ${email}, Quality: ${quality}, Result: ${result}, is_email_valid: ${row.is_email_valid}`)
-        } catch (err) {
-          console.error(`❌ Verification failed for ${email}`, err)
-          row.is_email_valid = false
+            const isValid = quality !== "risky" && quality !== "unknown"
+            if (isValid) {
+              isVerified = true
+              row.valid_email = email
+              row.email_result = result
+              row.email_quality = quality
+              row.email_resultcode = json.resultcode
+              break
+            }
+          } catch (err) {
+            console.error(`❌ Verification failed for ${email}`, err)
+          }
         }
-      } else {
-        row.is_email_valid = false
+      }
+
+      row.is_email_valid = isVerified
+      if (!isVerified) {
+        row.email_result = "invalid"
+        row.email_quality = "unknown"
       }
     }
 
@@ -150,7 +161,7 @@ const handler: Handler = async () => {
     XLSX.utils.book_append_sheet(book, sheet, "Results")
     const buffer = XLSX.write(book, { bookType: "xlsx", type: "buffer" })
 
-    const fileName = `queued_${Date.now()}.xlsx`
+    const fileName = `verified_${Date.now()}.xlsx`
     const { error: uploadError } = await supabaseAdmin.storage
       .from("scrapes")
       .upload(fileName, buffer, {
