@@ -26,7 +26,8 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
   const verifiedData = [...businessData]
 
   for (const item of verifiedData) {
-    let hasValidEmail = false
+    item.is_email_valid = false // ✅ Initialize explicitly
+    let validEmailFound = false
 
     for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
       const email = item[emailField]
@@ -35,24 +36,26 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
         try {
           const isValid = await verifyEmailWithMillionVerifier(email, resolvedApiKey)
 
-          // Save per-field validity
           const index = emailField === "email" ? "0" : emailField.split("_")[1]
           item[`is_email_valid_${index}`] = isValid
 
-          // Set main valid email only once
-          if (isValid && !hasValidEmail) {
-            hasValidEmail = true
-            item.email = email
+          if (isValid && !validEmailFound) {
+            item.email = email // ✅ Set main email to the first valid one
+            item.is_email_valid = true
+            validEmailFound = true
+          } else if (!isValid) {
+            item[`is_email_valid_${index}`] = false
           }
+
         } catch (err) {
           console.error(`❌ Verification error for ${email}:`, err)
+          const index = emailField === "email" ? "0" : emailField.split("_")[1]
+          item[`is_email_valid_${index}`] = false
         }
 
         await new Promise((r) => setTimeout(r, 300))
       }
     }
-
-    item.is_email_valid = hasValidEmail
   }
 
   return verifiedData
