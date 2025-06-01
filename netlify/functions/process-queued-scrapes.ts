@@ -119,13 +119,14 @@ const handler: Handler = async () => {
       return { statusCode: 200, body: "No data found." }
     }
 
+    // ✅ Email verification BEFORE XLSX export
     for (const row of businessData) {
       const emailFields = ['email', 'email_1', 'email_2', 'email_3']
       let isVerified = false
 
       for (const field of emailFields) {
         const email = row[field]
-        if (email) {
+        if (email && typeof email === "string" && email.includes("@")) {
           try {
             const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
             const res = await fetch(verifyUrl)
@@ -133,12 +134,12 @@ const handler: Handler = async () => {
 
             const result = json.result?.toLowerCase?.() || ""
             const quality = json.quality?.toLowerCase?.() || "unknown"
-            
+
             const isValid =
               ["ok", "valid", "catch_all"].includes(result) &&
               quality !== "risky" &&
               quality !== "unknown"
-            
+
             if (isValid) {
               isVerified = true
               row.valid_email = email
@@ -147,7 +148,7 @@ const handler: Handler = async () => {
               row.email_resultcode = json.resultcode
               break
             }
-                      } catch (err) {
+          } catch (err) {
             console.error(`❌ Verification failed for ${email}`, err)
           }
         }
@@ -160,6 +161,7 @@ const handler: Handler = async () => {
       }
     }
 
+    // ✅ Generate Excel AFTER verification
     const sheet = XLSX.utils.json_to_sheet(businessData)
     const book = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(book, sheet, "Results")
