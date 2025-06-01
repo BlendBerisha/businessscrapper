@@ -152,7 +152,7 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
         newRow.email_first_name = entryCopy[firstNameKey] || ""
         newRow.email_last_name = entryCopy[lastNameKey] || ""
         const index = emailKey.split("_")[1] // "1", "2", "3"
-        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] === true
+        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] ?? entryCopy.is_email_valid ?? false
         emailGroups.forEach(group => group.forEach(key => delete newRow[key]))
         withEmails.push(newRow)
         console.log("✅ Adding to withEmails:", {
