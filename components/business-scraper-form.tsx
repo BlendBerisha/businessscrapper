@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import * as XLSX from "xlsx"
 import { ReactNode, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -671,6 +671,44 @@ const handleTogglePause = async (id: string, currentState: boolean) => {
   // Refresh UI
   fetchRecurringSchedules().then(setRecurringSchedules)
 }
+const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+const [emailVerificationResults, setEmailVerificationResults] = useState<{ email: string, is_email_valid: boolean }[]>([])
+
+async function handleEmailFileVerification(file: File) {
+  const data = await file.arrayBuffer()
+  const workbook = XLSX.read(data, { type: "array" })
+  const sheetName = workbook.SheetNames[0]
+  const sheet = workbook.Sheets[sheetName]
+  const json = XLSX.utils.sheet_to_json<{ email: string }>(sheet)
+
+  const emails = json.map(row => row.email).filter(email => typeof email === "string" && email.includes("@"))
+
+  const results: { email: string, is_email_valid: boolean }[] = []
+
+  for (const email of emails) {
+    try {
+      const response = await fetch("https://api.usemillion.com/email/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${formData.millionApiKey}`,
+        },
+        body: JSON.stringify({ email }),
+      })
+      const result = await response.json()
+      results.push({
+        email,
+        is_email_valid: ["ok", "valid"].includes(result.result) && result.quality !== "risky",
+      })
+    } catch (error) {
+      console.error("Verification error for", email, error)
+      results.push({ email, is_email_valid: false })
+    }
+  }
+
+  setEmailVerificationResults(results)
+}
+
 
   return (
     
@@ -1126,6 +1164,40 @@ const handleTogglePause = async (id: string, currentState: boolean) => {
   )}
 </Button>
 
+<div className="border-t mt-10 pt-6">
+  <h3 className="text-lg font-semibold mb-4">Email Verifier</h3>
+  <input
+    type="file"
+    accept=".xlsx"
+    onChange={(e) => {
+      const file = e.target.files?.[0] || null
+      setUploadedFile(file)
+      if (file) handleEmailFileVerification(file)
+    }}
+    className="mb-4"
+  />
+
+  {emailVerificationResults.length > 0 && (
+    <div className="overflow-auto max-h-96 border rounded-md">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="p-2 text-left">Email</th>
+            <th className="p-2 text-left">Is Valid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {emailVerificationResults.map(({ email, is_email_valid }, i) => (
+            <tr key={i} className="border-t">
+              <td className="p-2">{email}</td>
+              <td className="p-2">{is_email_valid ? "✅ Yes" : "❌ No"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
 
 
                 {/* Download Buttons - Only show if data is available */}
