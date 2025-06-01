@@ -9,25 +9,26 @@ export async function POST(req: Request) {
     }
 
     const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}`
-    console.log(`🔍 Verifying ${email} using API key: ${apiKey.slice(0, 6)}...`)
-
     const res = await fetch(url)
 
     if (!res.ok) {
       const errorText = await res.text()
-      console.error("❌ API fetch failed:", errorText)
       return NextResponse.json({ error: `Verification failed: ${errorText}` }, { status: 500 })
     }
 
     const json = await res.json()
-    console.log(`📨 Response for ${email}:`, JSON.stringify(json, null, 2))
+    const result = json?.result?.toLowerCase?.() || ""
+    const quality = json?.quality?.toLowerCase?.() || ""
 
-    const rawResult = json?.result?.toLowerCase?.() || ""
-    const quality = json?.quality?.toLowerCase?.() || "unknown"
+    const isValid = (
+      ["ok", "valid"].includes(result) &&
+      ["good", "medium"].includes(quality)
+    )
 
     return NextResponse.json({
-      status: ["ok", "valid"].includes(rawResult) && quality !== "risky" ? "valid" : "invalid",
-      result: rawResult,
+      status: isValid ? "valid" : "invalid",
+      is_email_valid: isValid,
+      result,
       quality,
       resultcode: json.resultcode || 0,
       free: json.free || false,
@@ -35,7 +36,6 @@ export async function POST(req: Request) {
       email: json.email || email,
     })
   } catch (err) {
-    console.error("❌ Error verifying email:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

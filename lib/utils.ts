@@ -255,8 +255,11 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
     if (email) {
       try {
         const result = await verifyEmailViaRoute(email, apiKey)
-        row["is_email_valid"] = ["ok", "valid"].includes(result.result) && result.quality !== "risky"
-        console.log("📧 Verified", email, "→", result.quality, "→ is_email_valid =", result.quality !== "risky")
+        row["is_email_valid"] = (
+          ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+          result.quality?.toLowerCase?.() !== "risky"
+        )
+                console.log("📧 Verified", email, "→", result.quality, "→ is_email_valid =", result.quality !== "risky")
         row["email_result"] = result.result
         row["email_quality"] = result.quality
         row["email_resultcode"] = result.resultcode
