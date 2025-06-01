@@ -255,13 +255,18 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     let verifiedData = filteredData
 
+    // ✅ Step 1: Email verification logic
     if (
       formData.verifyEmails &&
       formData.connectEmailVerification &&
       formData.millionApiKey
     ) {
-      const hasEmailsToVerify = filteredData.some((item) =>
-        item.email || item.email_1 || item.email_2 || item.email_3
+      const hasEmailsToVerify = filteredData.some(
+        (item) =>
+          item.email ||
+          item.email_1 ||
+          item.email_2 ||
+          item.email_3
       )
     
       if (hasEmailsToVerify) {
@@ -292,26 +297,23 @@ const handleSubmit = async (e: React.FormEvent) => {
             variant: "destructive",
           })
     
-          // ✅ fallback to exporting filteredData
-// ✅ fallback to exporting filteredData
-downloadJsonAsFile(filteredData, `unverified_${formData.jsonFileName}`)
-
-if (filteredData.length > 0) {
-  convertJsonToCsv(filteredData, `unverified_${formData.csvFileName}`)
-  toast({
-    title: "CSV file created",
-    description: `Unverified CSV exported as unverified_${formData.csvFileName}`,
-    variant: "success",
-  })
-} else {
-  toast({
-    title: "CSV skipped",
-    description: "No records available to export to CSV.",
-    variant: "default",
-  })
-}
-
-                  }
+          downloadJsonAsFile(filteredData, `unverified_${formData.jsonFileName}`)
+    
+          if (filteredData.length > 0) {
+            convertJsonToCsv(filteredData, `unverified_${formData.csvFileName}`)
+            toast({
+              title: "CSV file created",
+              description: `Unverified CSV exported as unverified_${formData.csvFileName}`,
+              variant: "success",
+            })
+          } else {
+            toast({
+              title: "CSV skipped",
+              description: "No records available to export to CSV.",
+              variant: "default",
+            })
+          }
+        }
       } else {
         toast({
           title: "Email verification skipped",
@@ -333,13 +335,13 @@ if (filteredData.length > 0) {
       convertJsonToCsv(filteredData, formData.csvFileName)
     }
     
-
+    // ✅ Step 2: Send to Telegram
     if (formData.telegramBotToken && formData.telegramChatId) {
       toast({
         title: "Sending to Telegram",
         description: "Sending files to Telegram...",
       })
-
+    
       try {
         await sendTelegramMessage(
           `<b>Business Scraper Results</b>\n\nFound ${filteredData.length} business records for ${formData.businessType} in ${formData.city}, ${formData.state}`,
@@ -348,7 +350,7 @@ if (filteredData.length > 0) {
             chatId: formData.telegramChatId,
           }
         )
-
+    
         await sendTelegramFile(
           JSON.stringify(verifiedData || filteredData, null, 2),
           formData.jsonFileName,
@@ -357,7 +359,7 @@ if (filteredData.length > 0) {
             chatId: formData.telegramChatId,
           }
         )
-
+    
         toast({
           title: "Files sent to Telegram",
           description: "Business data has been sent to Telegram.",
@@ -372,7 +374,8 @@ if (filteredData.length > 0) {
         })
       }
     }
-
+    
+    // ✅ Step 3: Upload to Instantly
     if (
       formData.addtocampaign &&
       formData.connectColdEmail &&
@@ -384,22 +387,26 @@ if (filteredData.length > 0) {
         title: "Uploading to campaign",
         description: "Adding data to Instantly campaign...",
       })
-
+    
       try {
         const instantlyReadyData = (verifiedData || filteredData)
           .map((item) => {
             const email =
-              item.email || item.email_1 || item.email_2 || item.email_3 || ""
+              item.email ||
+              item.email_1 ||
+              item.email_2 ||
+              item.email_3 ||
+              ""
             return { ...item, email }
           })
           .filter((item) => item.email.includes("@"))
-
+    
         await uploadToInstantly(instantlyReadyData, {
           apiKey: formData.instantlyApiKey,
           listId: formData.instantlyListId,
           campaignId: formData.instantlyCampaignId,
         })
-
+    
         toast({
           title: "Data uploaded to Instantly",
           description: "Business data has been uploaded to Instantly campaign.",
@@ -420,7 +427,7 @@ if (filteredData.length > 0) {
         variant: "destructive",
       })
     }
-
+    
     setHasData(true)
 
     toast({

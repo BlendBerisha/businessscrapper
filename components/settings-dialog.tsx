@@ -166,7 +166,7 @@ export function SettingsDialog({ open, onOpenChange, formData, onFormDataChange 
             id="instantlyProfileName"
             value={localSettings.tempInstantlyProfileName || ""}
             onChange={(e) => handleChange("tempInstantlyProfileName", e.target.value)}
-            placeholder="e.g. blendi list"
+            placeholder="e.g.  profile 1"
           />
         </div>
         <div className="space-y-2">
