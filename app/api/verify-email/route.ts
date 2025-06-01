@@ -23,18 +23,18 @@ export async function POST(req: Request) {
     console.log(`📨 Response for ${email}:`, JSON.stringify(json, null, 2))
 
     const rawResult = json?.result?.toLowerCase?.() || ""
-    const status = ["valid", "catch_all", "ok"].includes(rawResult) ? "valid" : "invalid"
-    
+    const quality = json?.quality?.toLowerCase?.() || "unknown"
+
     return NextResponse.json({
-      status,
+      status: ["ok", "valid"].includes(rawResult) && quality !== "risky" ? "valid" : "invalid",
       result: rawResult,
-      quality: json.quality || "",
+      quality,
       resultcode: json.resultcode || 0,
       free: json.free || false,
       role: json.role || false,
       email: json.email || email,
     })
-      } catch (err) {
+  } catch (err) {
     console.error("❌ Error verifying email:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
