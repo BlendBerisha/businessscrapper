@@ -389,17 +389,25 @@ await convertAndVerifyJson(verifiedData, formData.millionApiKey)
       })
     
       try {
-        const instantlyReadyData = (verifiedData || filteredData)
-          .map((item) => {
-            const email =
-              item.email ||
-              item.email_1 ||
-              item.email_2 ||
-              item.email_3 ||
-              ""
-            return { ...item, email }
-          })
-          .filter((item) => item.email.includes("@"))
+const instantlyReadyData = (verifiedData || filteredData)
+  .map((item) => {
+    const email =
+      item.email_1 || item.email || item.email_2 || item.email_3 || ""
+
+    return {
+      email,
+      first_name: item.first_name || email.split("@")[0],
+      last_name: item.last_name || "",
+      custom_variables: {
+        company: item.company_name || item.display_name || "",
+        phone: item.phone || "",
+        city: item.city || "",
+        country: item.country || "",
+        website: item.website || "",
+      },
+    }
+  })
+  .filter((item) => item.email.includes("@"))
     
         await uploadToInstantly(instantlyReadyData, {
           apiKey: formData.instantlyApiKey,
