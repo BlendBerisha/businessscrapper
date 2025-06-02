@@ -268,13 +268,13 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
         row["is_email_valid"] = true
       }
     } else {
-      row["is_email_valid"] = true
+      row["is_email_valid"] = false
     }
   }
   
   if (dfNo.length > 0) {
     dfNo.forEach(row => {
-      row["is_email_valid"] = true
+      row["is_email_valid"] = false
     })
   }
 
