@@ -2,6 +2,7 @@ import { Handler } from "@netlify/functions"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
 import { supabase } from "../../lib/supabase"
+import { verifyEmails } from "@/actions/million-verifier"
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -92,6 +93,7 @@ const handler: Handler = async () => {
     if (!apiKey) throw new Error("Missing Targetron API key in settings")
     if (!mvKey) throw new Error("Missing MillionVerifier API key in settings")
 
+    // Step 1: Scrape businesses
     let businessData = null
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
@@ -119,50 +121,11 @@ const handler: Handler = async () => {
       return { statusCode: 200, body: "No data found." }
     }
 
-    // ✅ Email verification BEFORE XLSX export
-    for (const row of businessData) {
-      const emailFields = ['email', 'email_1', 'email_2', 'email_3']
-      let isVerified = false
+    // ✅ Step 2: Run centralized email verification
+    const verifiedData = await verifyEmails(businessData, mvKey)
 
-      for (const field of emailFields) {
-        const email = row[field]
-        if (email && typeof email === "string" && email.includes("@")) {
-          try {
-            const verifyUrl = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(mvKey)}&email=${encodeURIComponent(email)}`
-            const res = await fetch(verifyUrl)
-            const json = await res.json()
-
-            const result = json.result?.toLowerCase?.() || ""
-            const quality = json.quality?.toLowerCase?.() || "unknown"
-
-            const isValid =
-              ["ok", "valid", "catch_all"].includes(result) &&
-              quality !== "risky" &&
-              quality !== "unknown"
-
-            if (isValid) {
-              isVerified = true
-              row.valid_email = email
-              row.email_result = result
-              row.email_quality = quality
-              row.email_resultcode = json.resultcode
-              break
-            }
-          } catch (err) {
-            console.error(`❌ Verification failed for ${email}`, err)
-          }
-        }
-      }
-
-      row.is_email_valid = isVerified
-      if (!isVerified) {
-        row.email_result = "invalid"
-        row.email_quality = "unknown"
-      }
-    }
-
-    // ✅ Generate Excel AFTER verification
-    const sheet = XLSX.utils.json_to_sheet(businessData)
+    // ✅ Step 3: Export verified data to Excel
+    const sheet = XLSX.utils.json_to_sheet(verifiedData)
     const book = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(book, sheet, "Results")
     const buffer = XLSX.write(book, { bookType: "xlsx", type: "buffer" })
