@@ -127,7 +127,7 @@ const handler: Handler = async () => {
       const emailRaw = item.email || item.email_1 || item.email_2 || item.email_3
       const email = typeof emailRaw === "string" && emailRaw.includes("@") ? emailRaw.trim() : null
     
-      let isValid = false
+      let isValid = true
       if (email) {
         try {
           const response = await fetch("https://api.millionverifier.com/api/v3/", {
