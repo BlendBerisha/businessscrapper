@@ -171,11 +171,12 @@ export function SettingsDialog({ open, onOpenChange, formData, onFormDataChange 
         </div>
         <div className="space-y-2">
           <Label htmlFor="instantlyListId">List ID</Label>
-          <Input
-            id="instantlyListId"
-            value={localSettings.tempInstantlyListId || ""}
-            onChange={(e) => handleChange("tempInstantlyListId", e.target.value)}
-          />
+<Input
+  id="instantlyListId"
+  value={localSettings.tempInstantlyListId || ""}
+  onChange={(e) => handleChange("tempInstantlyListId", e.target.value)}
+  required={false}
+/>
         </div>
         <div className="space-y-2">
           <Label htmlFor="instantlyCampaignId">Campaign ID</Label>
