@@ -151,37 +151,39 @@ export class InstantlyAPI {
 
     console.log(`📥 Preparing upload of leads to Instantly...`)
 
-    for (const row of data) {
-      for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
-        const email = row[emailKey]?.trim()
-        if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
-        if (row.is_email_valid !== true && row.is_email_valid !== "TRUE") continue
+for (const row of data) {
+  for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
+    const email = row[emailKey]?.trim()
+    if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
 
-        seenEmails.add(email)
+    const isValidFlag = String(row.is_email_valid).toLowerCase()
+    if (isValidFlag !== "true") continue
 
-        const lead = {
-          email,
-          first_name: row[firstNameKey] || "Unknown",
-          last_name: row[lastNameKey] || "Unknown",
-          company_name: row.display_name || "N/A",
-          website: row.site || "N/A",
-          phone: row.phone || "N/A",
-          personalization: `Hello ${row[firstNameKey] || "there"}, I wanted to connect.`,
-          extra_fields: row,
-          custom_variables: {
-            email_title: row[titleKey] || "",
-            email_first_name: row[firstNameKey] || "",
-            email_last_name: row[lastNameKey] || "",
-            is_email_valid: row.is_email_valid || false,
-            enrich_area_codes: row["enrich area codes"] || ""
-          },
-        }
+    seenEmails.add(email)
 
-        const success = await this.addLead(lead)
-        if (success) successful.push(email)
-        else failed.push(email)
-      }
+    const lead = {
+      email,
+      first_name: row[firstNameKey] || "Unknown",
+      last_name: row[lastNameKey] || "Unknown",
+      company_name: row.display_name || "N/A",
+      website: row.site || "N/A",
+      phone: row.phone || "N/A",
+      personalization: `Hello ${row[firstNameKey] || "there"}, I wanted to connect.`,
+      extra_fields: row,
+      custom_variables: {
+        email_title: row[titleKey] || "",
+        email_first_name: row[firstNameKey] || "",
+        email_last_name: row[lastNameKey] || "",
+        is_email_valid: row.is_email_valid || false,
+        enrich_area_codes: row["enrich area codes"] || "",
+      },
     }
+
+    const success = await this.addLead(lead)
+    if (success) successful.push(email)
+    else failed.push(email)
+  }
+}
 
     console.log(`✅ Successfully uploaded: ${successful.length}`)
     console.log(`❌ Failed uploads: ${failed.length}`)
