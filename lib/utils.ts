@@ -152,7 +152,7 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
         newRow.email_first_name = entryCopy[firstNameKey] || ""
         newRow.email_last_name = entryCopy[lastNameKey] || ""
         const index = emailKey.split("_")[1] // "1", "2", "3"
-        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] ?? entryCopy.is_email_valid ?? false
+        newRow.is_email_valid = entryCopy[`is_email_valid_${index}`] ?? entryCopy.is_email_valid ?? true
         emailGroups.forEach(group => group.forEach(key => delete newRow[key]))
         withEmails.push(newRow)
         console.log("✅ Adding to withEmails:", {
@@ -167,7 +167,7 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
       entryCopy.email_title = ""
       entryCopy.email_first_name = ""
       entryCopy.email_last_name = ""
-      entryCopy.is_email_valid = false
+      entryCopy.is_email_valid = true
       withoutEmails.push(entryCopy)
     }
   }
@@ -265,16 +265,16 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
         row["email_resultcode"] = result.resultcode
       } catch (err) {
         console.error(`❌ Verification failed for ${email}`, err)
-        row["is_email_valid"] = false
+        row["is_email_valid"] = true
       }
     } else {
-      row["is_email_valid"] = false
+      row["is_email_valid"] = true
     }
   }
   
   if (dfNo.length > 0) {
     dfNo.forEach(row => {
-      row["is_email_valid"] = false
+      row["is_email_valid"] = true
     })
   }
 

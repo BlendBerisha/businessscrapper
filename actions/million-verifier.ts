@@ -25,8 +25,8 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
   const verifiedData = [...businessData]
 
   for (const item of verifiedData) {
-    item.is_email_valid = true
-    let hasValidEmail = true
+    item.is_email_valid = false
+    let hasValidEmail = false
 
     for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
       const email = item[emailField]
@@ -44,7 +44,7 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
         } catch (err) {
           console.error(`❌ Verification error for ${email}:`, err)
           const index = emailField === "email" ? "0" : emailField.split("_")[1]
-          item[`is_email_valid_${index}`] = false
+          item[`is_email_valid_${index}`] = true
         }
         await new Promise((r) => setTimeout(r, 300))
       }
