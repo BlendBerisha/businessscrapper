@@ -19,7 +19,7 @@ import { toast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { saveSettings, loadSettings } from "@/lib/settings-storage"
-import { downloadJsonAsFile, convertJsonToCsv } from "@/lib/utils"
+import { downloadJsonAsFile, exportDataWithEmailVerification } from "@/lib/utils"
 import { loadEnrichAreaCodesFromURL } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 import { fetchRecurringSchedules } from "@/lib/utils" // adjust path
@@ -282,7 +282,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           setBusinessData(verifiedData)
     
           downloadJsonAsFile(verifiedData, `verified_${formData.jsonFileName}`)
-          convertJsonToCsv(verifiedData, `verified_${formData.csvFileName}`)
+          exportDataWithEmailVerification(verifiedData, `verified_${formData.csvFileName}`)
     
           toast({
             title: "Emails verified",
@@ -300,7 +300,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           downloadJsonAsFile(filteredData, `unverified_${formData.jsonFileName}`)
     
           if (filteredData.length > 0) {
-            convertJsonToCsv(filteredData, `unverified_${formData.csvFileName}`)
+            exportDataWithEmailVerification(filteredData, `unverified_${formData.csvFileName}`)
             toast({
               title: "CSV file created",
               description: `Unverified CSV exported as unverified_${formData.csvFileName}`,
@@ -322,7 +322,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         })
     
         downloadJsonAsFile(filteredData, formData.jsonFileName)
-        convertJsonToCsv(filteredData, formData.csvFileName)
+        exportDataWithEmailVerification(filteredData, formData.csvFileName)
       }
     } else if (formData.verifyEmails && formData.connectEmailVerification) {
       toast({
@@ -332,7 +332,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       })
     
       downloadJsonAsFile(filteredData, formData.jsonFileName)
-      convertJsonToCsv(filteredData, formData.csvFileName)
+      exportDataWithEmailVerification(filteredData, formData.csvFileName)
     }
     
     // ✅ Step 2: Send to Telegram
@@ -460,7 +460,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   const handleDownloadCsv = () => {
     if (businessData.length > 0) {
-      convertJsonToCsv(businessData, formData.csvFileName)
+      exportDataWithEmailVerification(businessData, formData.csvFileName)
       toast({
         title: "CSV file created",
         description: `Data exported as ${formData.csvFileName}`,
