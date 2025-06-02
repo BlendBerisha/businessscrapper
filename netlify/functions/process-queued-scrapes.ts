@@ -121,8 +121,42 @@ const handler: Handler = async () => {
     }
 
     // ✅ VERIFY EMAILS
-    const verifiedData = await verifyEmails(businessData, mvKey)
+    const verifiedData: any[] = []
 
+    for (const item of businessData) {
+      const emailRaw = item.email || item.email_1 || item.email_2 || item.email_3
+      const email = typeof emailRaw === "string" && emailRaw.includes("@") ? emailRaw.trim() : null
+    
+      let isValid = false
+      if (email) {
+        try {
+          const response = await fetch("https://api.millionverifier.com/api/v3/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              api: mvKey,
+              email,
+            }),
+          })
+          const result = await response.json()
+    
+          isValid =
+            ["ok", "valid"].includes(result.result?.toLowerCase?.()) &&
+            result.quality?.toLowerCase?.() !== "risky"
+    
+          console.log(`📧 ${email} → ${result.result}/${result.quality} → valid:`, isValid)
+        } catch (err) {
+          console.error("❌ Email verification failed for", email, err)
+        }
+      }
+    
+      verifiedData.push({
+        ...item,
+        email: email || "",
+        is_email_valid: isValid,
+      })
+    }
+    
     // ✅ EXPORT TO XLSX
     const sheet = XLSX.utils.json_to_sheet(verifiedData)
     const book = XLSX.utils.book_new()
