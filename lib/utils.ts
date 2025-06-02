@@ -167,7 +167,7 @@ function separateEmailData(jsonData: any[]): { withEmails: any[], withoutEmails:
       entryCopy.email_title = ""
       entryCopy.email_first_name = ""
       entryCopy.email_last_name = ""
-      entryCopy.is_email_valid = true
+      entryCopy.is_email_valid = false
       withoutEmails.push(entryCopy)
     }
   }
@@ -265,7 +265,7 @@ export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promis
         row["email_resultcode"] = result.resultcode
       } catch (err) {
         console.error(`❌ Verification failed for ${email}`, err)
-        row["is_email_valid"] = true
+        row["is_email_valid"] = false
       }
     } else {
       row["is_email_valid"] = false
