@@ -93,7 +93,6 @@ const handler: Handler = async () => {
     if (!apiKey) throw new Error("Missing Targetron API key in settings")
     if (!mvKey) throw new Error("Missing MillionVerifier API key in settings")
 
-    // Step 1: Scrape businesses
     let businessData = null
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
@@ -121,10 +120,10 @@ const handler: Handler = async () => {
       return { statusCode: 200, body: "No data found." }
     }
 
-    // ✅ Step 2: Run centralized email verification
+    // ✅ VERIFY EMAILS
     const verifiedData = await verifyEmails(businessData, mvKey)
 
-    // ✅ Step 3: Export verified data to Excel
+    // ✅ EXPORT TO XLSX
     const sheet = XLSX.utils.json_to_sheet(verifiedData)
     const book = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(book, sheet, "Results")
