@@ -407,7 +407,7 @@ const instantlyReadyData = (verifiedData || filteredData)
       },
     }
   })
-  .filter((item) => item.email.includes("@"))
+  .filter((item) => item.email && item.email.includes("@"))
     
         await uploadToInstantly(instantlyReadyData, {
           apiKey: formData.instantlyApiKey,
