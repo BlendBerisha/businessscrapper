@@ -156,8 +156,8 @@ for (const row of data) {
     const email = row[emailKey]?.trim()
     if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
 
-    const isValidFlag = String(row.is_email_valid).toLowerCase()
-    if (isValidFlag !== "true") continue
+const isValidFlag = String(row[emailKey.replace("email", "is_email_valid")])?.toLowerCase?.()
+if (isValidFlag !== "true") continue
 
     seenEmails.add(email)
 
