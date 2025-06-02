@@ -25,8 +25,8 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
   const verifiedData = [...businessData]
 
   for (const item of verifiedData) {
-    item.is_email_valid = false
-    let hasValidEmail = false
+    item.is_email_valid = true
+    let hasValidEmail = true
 
     for (const emailField of ["email", "email_1", "email_2", "email_3"]) {
       const email = item[emailField]
