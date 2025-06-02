@@ -25,6 +25,7 @@ export function downloadJsonAsFile(data: any, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+// Enrich Area Codes
 let enrichAreaCodeMap: Record<string, string> = {}
 export async function loadEnrichAreaCodesFromURL(url: string = "/enrich-area-codes.xlsx"): Promise<void> {
   const response = await fetch(url)
@@ -33,6 +34,7 @@ export async function loadEnrichAreaCodesFromURL(url: string = "/enrich-area-cod
   const workbook = XLSX.read(arrayBuffer, { type: "array" })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
   const jsonData: any[] = XLSX.utils.sheet_to_json(sheet)
+
   enrichAreaCodeMap = {}
   for (const row of jsonData) {
     const postcode = String(row["postcode"] || "").split(" ")[0].trim().toUpperCase()
@@ -42,63 +44,51 @@ export async function loadEnrichAreaCodesFromURL(url: string = "/enrich-area-cod
   console.log("✅ Enrich map loaded with", Object.keys(enrichAreaCodeMap).length, "entries")
 }
 
-export async function exportDataWithEmailVerification(jsonData: any[], apiKey: string) {
+// XLSX Export
+export function convertJsonToCsv(jsonData: any[], filename: string) {
   if (!isBrowser()) return
+
   const columnOrder = [
     "display_name", "types", "type", "country_code", "state", "city", "county", "street", "postal_code",
-    "enrich area codes", "address", "latitude", "longitude", "phone", "phone_type", "linkedin", "facebook",
-    "twitter", "instagram", "tiktok", "whatsapp", "youtube", "site", "site_generator", "photo", "photos_count",
-    "rating", "rating_history", "reviews", "reviews_link", "range", "business_status", "business_status_history",
-    "booking_appointment_link", "menu_link", "verified", "owner_title", "located_in", "os_id", "google_id",
-    "place_id", "cid", "gmb_link", "located_os_id", "working_hours", "area_service", "about", "corp_name",
-    "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
-    "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
+    "enrich area codes", "address", "latitude", "longitude", "phone", "phone_type", "linkedin", "facebook", "twitter",
+    "instagram", "tiktok", "whatsapp", "youtube", "site", "site_generator", "photo", "photos_count", "rating",
+    "rating_history", "reviews", "reviews_link", "range", "business_status", "business_status_history",
+    "booking_appointment_link", "menu_link", "verified", "owner_title", "located_in", "os_id", "google_id", "place_id",
+    "cid", "gmb_link", "located_os_id", "working_hours", "area_service", "about", "corp_name", "corp_employees",
+    "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at", "email", "email_title",
+    "email_first_name", "email_last_name", "is_email_valid"
   ]
 
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
-  for (const row of withEmails) {
-    const result = await verifyEmailViaRoute(row.email, apiKey)
-    row.is_email_valid = ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-                         result.quality?.toLowerCase?.() !== "risky"
-    row.email_result = result.result
-    row.email_quality = result.quality
-    row.email_resultcode = result.resultcode
+
+  const workbook = XLSX.utils.book_new()
+  if (withEmails.length > 0) {
+    const sheet = createWorksheet(withEmails, columnOrder)
+    applyFormatting(sheet, columnOrder)
+    XLSX.utils.book_append_sheet(workbook, sheet, "With Emails")
+  }
+  if (withoutEmails.length > 0) {
+    const sheet = createWorksheet(withoutEmails, columnOrder)
+    applyFormatting(sheet, columnOrder)
+    XLSX.utils.book_append_sheet(workbook, sheet, "No Emails")
+  }
+  if (withEmails.length === 0 && withoutEmails.length === 0) {
+    const sheet = XLSX.utils.aoa_to_sheet([["No data available"]])
+    XLSX.utils.book_append_sheet(workbook, sheet, "No Data")
   }
 
-  const fullWorkbook = XLSX.utils.book_new()
-  if (withEmails.length > 0) XLSX.utils.book_append_sheet(fullWorkbook, createWorksheet(withEmails, columnOrder), "With Emails")
-  if (withoutEmails.length > 0) XLSX.utils.book_append_sheet(fullWorkbook, createWorksheet(withoutEmails, columnOrder), "No Emails")
-  const fullBlob = XLSX.write(fullWorkbook, { bookType: "xlsx", type: "array" })
-  triggerDownload(fullBlob, "full_data.xlsx")
-
-  const emailsOnly = withEmails.map(row => ({
-    email: row.email,
-    email_title: row.email_title,
-    email_first_name: row.email_first_name,
-    email_last_name: row.email_last_name,
-    is_email_valid: row.is_email_valid,
-    email_result: row.email_result,
-    email_quality: row.email_quality,
-    email_resultcode: row.email_resultcode,
-  }))
-  const emailWorkbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(emailWorkbook, XLSX.utils.json_to_sheet(emailsOnly), "Verified Emails")
-  const emailBlob = XLSX.write(emailWorkbook, { bookType: "xlsx", type: "array" })
-  triggerDownload(emailBlob, "emails_verified.xlsx")
-}
-
-function triggerDownload(blobArrayBuffer: ArrayBuffer, filename: string) {
-  const blob = new Blob([blobArrayBuffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  })
+  const finalName = filename.endsWith(".xlsx") ? filename : filename.replace(/\.csv$/, "") + ".xlsx"
+  const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
+  const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = filename
+  a.download = finalName
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+  return blob
 }
 
 function separateEmailData(jsonData: any[]) {
@@ -166,7 +156,75 @@ function createWorksheet(data: any[], columns: string[]): XLSX.WorkSheet {
   return XLSX.utils.json_to_sheet(rows, { header: columns })
 }
 
-async function verifyEmailViaRoute(email: string, apiKey: string) {
+function applyFormatting(sheet: XLSX.WorkSheet, columns: string[]): void {
+  sheet["!cols"] = columns.map(col => ({ wch: Math.max(col.length, 15) }))
+  const phoneIndex = columns.indexOf("phone")
+  if (phoneIndex !== -1) {
+    const range = XLSX.utils.decode_range(sheet["!ref"] || "A1:A1")
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: phoneIndex })
+      const cell = sheet[cellAddr]
+      if (cell) {
+        cell.t = "s"
+        if (typeof cell.v === "string" && !cell.v.startsWith("'")) {
+          cell.v = `'${cell.v}`
+        }
+      }
+    }
+  }
+}
+
+// Email Verification Integration
+export async function verifyEmailsInXlsxFile(file: File, apiKey: string): Promise<Blob> {
+  const data = await file.arrayBuffer()
+  const workbook = XLSX.read(data, { type: "array" })
+  const sheetWith = workbook.Sheets["With Emails"]
+  const sheetNo = workbook.Sheets["No Emails"]
+
+  const dfWith = sheetWith ? XLSX.utils.sheet_to_json<any>(sheetWith) : []
+  const dfNo = sheetNo ? XLSX.utils.sheet_to_json<any>(sheetNo) : []
+
+  for (const row of dfWith) {
+    const email = row.email?.trim()
+    if (email) {
+      try {
+        const result = await verifyEmailViaRoute(email, apiKey)
+        row.is_email_valid = ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) && result.quality?.toLowerCase?.() !== "risky"
+        row.email_result = result.result
+        row.email_quality = result.quality
+        row.email_resultcode = result.resultcode
+        console.log("📧 Verified", email, "→", result.quality, "→ is_email_valid =", row.is_email_valid)
+      } catch (err) {
+        console.error("❌ Error verifying", email, err)
+        row.is_email_valid = false
+      }
+    } else {
+      row.is_email_valid = false
+    }
+  }
+
+  dfNo.forEach(row => row.is_email_valid = false)
+
+  const newWorkbook = XLSX.utils.book_new()
+  if (dfWith.length > 0) XLSX.utils.book_append_sheet(newWorkbook, XLSX.utils.json_to_sheet(dfWith), "With Emails")
+  if (dfNo.length > 0) XLSX.utils.book_append_sheet(newWorkbook, XLSX.utils.json_to_sheet(dfNo), "No Emails")
+
+  const buffer = XLSX.write(newWorkbook, { bookType: "xlsx", type: "array" })
+  return new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  })
+}
+
+interface EmailVerificationResult {
+  status: string
+  result: string
+  quality: string
+  resultcode: number
+  free: boolean
+  role: boolean
+  email: string
+}
+async function verifyEmailViaRoute(email: string, apiKey: string): Promise<EmailVerificationResult> {
   const res = await fetch("/api/verify-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -177,9 +235,11 @@ async function verifyEmailViaRoute(email: string, apiKey: string) {
   return result
 }
 
+// For displaying recurring jobs in UI
 export async function fetchRecurringSchedules() {
   const { data: recurring } = await supabase.from("recurring_scrapes").select("*")
   const { data: queued } = await supabase.from("scrape_queue").select("*").not("status", "in", '("completed", "failed", "no_results")')
+
   const recurringFormatted = (recurring || []).map(r => ({ ...r, source: "recurring" }))
   const queuedFormatted = (queued || []).map(q => ({
     ...q,
@@ -195,4 +255,60 @@ export async function fetchRecurringSchedules() {
 export function getNormalizedColumn(row: Record<string, any>, targetKey: string) {
   const matchKey = Object.keys(row).find(k => k.trim().toLowerCase() === targetKey.trim().toLowerCase())
   return matchKey ? row[matchKey] : ""
+}
+
+
+export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
+  // 1. Export original file
+  convertJsonToCsv(jsonData, "original-export.xlsx")
+
+  // 2. Extract emails
+  const emailSet = new Set<string>()
+  for (const row of jsonData) {
+    Object.keys(row).forEach((key) => {
+      if (key.toLowerCase().startsWith("email") && typeof row[key] === "string") {
+        const email = row[key].trim()
+        if (email.includes("@")) emailSet.add(email)
+      }
+    })
+  }
+
+  // 3. Verify emails
+  const verifiedResults: { email: string, is_email_valid: boolean }[] = []
+
+  for (const email of emailSet) {
+    try {
+      const res = await fetch("/api/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, apiKey }),
+      })
+      const result = await res.json()
+      const isValid = ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+                      result.quality?.toLowerCase?.() !== "risky"
+      verifiedResults.push({ email, is_email_valid: isValid })
+    } catch (err) {
+      console.error("❌ Error verifying", email, err)
+      verifiedResults.push({ email, is_email_valid: false })
+    }
+  }
+
+  // 4. Export second file
+  const sheet = XLSX.utils.json_to_sheet(verifiedResults)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, "Verified Emails")
+
+  const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  })
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = "verified-emails.xlsx"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
