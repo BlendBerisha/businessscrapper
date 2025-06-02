@@ -259,22 +259,41 @@ export function getNormalizedColumn(row: Record<string, any>, targetKey: string)
 
 
 export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
-  // 1. Export original file
-  convertJsonToCsv(jsonData, "original-export.xlsx")
+  if (typeof window === "undefined") return
 
-  // 2. Extract emails
+  // 🔹 Step 1: Separate into with/without email
+  const { withEmails, withoutEmails } = separateEmailData(jsonData)
+
+  const workbook = XLSX.utils.book_new()
+
+  // 🔹 Step 2: Add original sheets
+  if (withEmails.length > 0) {
+    const sheetWith = XLSX.utils.json_to_sheet(withEmails)
+    XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
+  }
+  if (withoutEmails.length > 0) {
+    const sheetWithout = XLSX.utils.json_to_sheet(withoutEmails)
+    XLSX.utils.book_append_sheet(workbook, sheetWithout, "No Emails")
+  }
+
+  if (withEmails.length === 0 && withoutEmails.length === 0) {
+    const sheetEmpty = XLSX.utils.aoa_to_sheet([["No data available"]])
+    XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
+  }
+
+  // 🔹 Step 3: Extract unique emails
   const emailSet = new Set<string>()
-  for (const row of jsonData) {
+  jsonData.forEach((row) => {
     Object.keys(row).forEach((key) => {
       if (key.toLowerCase().startsWith("email") && typeof row[key] === "string") {
         const email = row[key].trim()
         if (email.includes("@")) emailSet.add(email)
       }
     })
-  }
+  })
 
-  // 3. Verify emails
-  const verifiedResults: { email: string, is_email_valid: boolean }[] = []
+  // 🔹 Step 4: Verify emails
+  const verifiedResults: { email: string; is_email_valid: boolean }[] = []
 
   for (const email of emailSet) {
     try {
@@ -284,20 +303,22 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
         body: JSON.stringify({ email, apiKey }),
       })
       const result = await res.json()
-      const isValid = ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-                      result.quality?.toLowerCase?.() !== "risky"
+      const isValid =
+        ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+        result.quality?.toLowerCase?.() !== "risky"
+
       verifiedResults.push({ email, is_email_valid: isValid })
     } catch (err) {
-      console.error("❌ Error verifying", email, err)
+      console.error("❌ Error verifying:", email, err)
       verifiedResults.push({ email, is_email_valid: false })
     }
   }
 
-  // 4. Export second file
-  const sheet = XLSX.utils.json_to_sheet(verifiedResults)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, sheet, "Verified Emails")
+  // 🔹 Step 5: Add verified emails sheet
+  const verifiedSheet = XLSX.utils.json_to_sheet(verifiedResults)
+  XLSX.utils.book_append_sheet(workbook, verifiedSheet, "Verified Emails")
 
+  // 🔹 Step 6: Save all sheets in one file
   const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -306,7 +327,7 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = "verified-emails.xlsx"
+  a.download = "business-verified-export.xlsx"
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
