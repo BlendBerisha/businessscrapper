@@ -44,7 +44,7 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
         } catch (err) {
           console.error(`❌ Verification error for ${email}:`, err)
           const index = emailField === "email" ? "0" : emailField.split("_")[1]
-          item[`is_email_valid_${index}`] = true
+          item[`is_email_valid_${index}`] = false
         }
         await new Promise((r) => setTimeout(r, 300))
       }
