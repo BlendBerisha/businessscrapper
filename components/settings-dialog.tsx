@@ -198,10 +198,10 @@ export function SettingsDialog({ open, onOpenChange, formData, onFormDataChange 
             campaignId: localSettings.tempInstantlyCampaignId,
           }
 
-          if (!newProfile.name || !newProfile.listId || !newProfile.campaignId) {
-            alert("Please fill all fields to save a profile.")
-            return
-          }
+if (!newProfile.name || !newProfile.campaignId) {
+  alert("Please fill in both Profile Name and Campaign ID.")
+  return
+}
 
           const updatedProfiles = [
             ...(localSettings.instantlyProfiles || []),
