@@ -376,13 +376,13 @@ await convertAndVerifyJson(verifiedData, formData.millionApiKey)
     }
     
     // ✅ Step 3: Upload to Instantly
-    if (
-      formData.addtocampaign &&
-      formData.connectColdEmail &&
-      formData.instantlyApiKey &&
-      formData.instantlyListId &&
-      formData.instantlyCampaignId
-    ) {
+  if (
+  formData.addtocampaign &&
+  formData.connectColdEmail &&
+  formData.instantlyApiKey &&
+  formData.instantlyCampaignId
+)
+{
       toast({
         title: "Uploading to campaign",
         description: "Adding data to Instantly campaign...",
