@@ -261,27 +261,12 @@ export function getNormalizedColumn(row: Record<string, any>, targetKey: string)
 export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
   if (typeof window === "undefined") return
 
-  // 🔹 Step 1: Separate into with/without email
+  // Step 1: Separate into with/without email
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
 
   const workbook = XLSX.utils.book_new()
 
-  // 🔹 Step 2: Add original sheets
-  if (withEmails.length > 0) {
-    const sheetWith = XLSX.utils.json_to_sheet(withEmails)
-    XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
-  }
-  if (withoutEmails.length > 0) {
-    const sheetWithout = XLSX.utils.json_to_sheet(withoutEmails)
-    XLSX.utils.book_append_sheet(workbook, sheetWithout, "No Emails")
-  }
-
-  if (withEmails.length === 0 && withoutEmails.length === 0) {
-    const sheetEmpty = XLSX.utils.aoa_to_sheet([["No data available"]])
-    XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
-  }
-
-  // 🔹 Step 3: Extract unique emails
+  // Step 2: Extract unique emails for verification
   const emailSet = new Set<string>()
   jsonData.forEach((row) => {
     Object.keys(row).forEach((key) => {
@@ -292,7 +277,7 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
     })
   })
 
-  // 🔹 Step 4: Verify emails
+  // Step 3: Verify emails
   const verifiedResults: { email: string; is_email_valid: boolean }[] = []
 
   for (const email of emailSet) {
@@ -314,11 +299,40 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
     }
   }
 
-  // 🔹 Step 5: Add verified emails sheet
-  const verifiedSheet = XLSX.utils.json_to_sheet(verifiedResults)
-  XLSX.utils.book_append_sheet(workbook, verifiedSheet, "Verified Emails")
+  // Step 4: Create a quick lookup map
+  const emailValidationMap = Object.fromEntries(
+    verifiedResults.map(({ email, is_email_valid }) => [email.toLowerCase(), is_email_valid])
+  )
 
-  // 🔹 Step 6: Save all sheets in one file
+  // Step 5: Overwrite values in withEmails
+  const updatedWithEmails = withEmails.map((row) => {
+    const email = row.email?.toLowerCase?.()
+    if (email && emailValidationMap[email] !== undefined) {
+      return { ...row, is_email_valid: emailValidationMap[email] }
+    }
+    return row
+  })
+
+  // Step 6: Add updated sheets
+  if (updatedWithEmails.length > 0) {
+    const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
+    XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
+  }
+  if (withoutEmails.length > 0) {
+    const sheetWithout = XLSX.utils.json_to_sheet(withoutEmails)
+    XLSX.utils.book_append_sheet(workbook, sheetWithout, "No Emails")
+  }
+
+  if (updatedWithEmails.length === 0 && withoutEmails.length === 0) {
+    const sheetEmpty = XLSX.utils.aoa_to_sheet([["No data available"]])
+    XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
+  }
+
+  // Step 7: Also include the verified sheet (optional)
+  const sheetVerified = XLSX.utils.json_to_sheet(verifiedResults)
+  XLSX.utils.book_append_sheet(workbook, sheetVerified, "Verified Emails")
+
+  // Step 8: Download combined file
   const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -327,7 +341,7 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = "business-verified-export.xlsx"
+  a.download = "business-verified-overwritten.xlsx"
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
