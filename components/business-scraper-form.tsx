@@ -1170,7 +1170,7 @@ async function handleEmailFileVerification(file: File) {
   )}
 </Button>
 
-<div className="border-t mt-10 pt-6">
+{/* <div className="border-t mt-10 pt-6">
   <h3 className="text-lg font-semibold mb-4">Email Verifier</h3>
   <input
     type="file"
@@ -1203,7 +1203,7 @@ async function handleEmailFileVerification(file: File) {
       </table>
     </div>
   )}
-</div>
+</div> */}
 
 
                 {/* Download Buttons - Only show if data is available */}
