@@ -35,7 +35,7 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
         try {
           const isValid = await verifyEmailWithMillionVerifier(email, resolvedApiKey)
           const index = emailField === "email" ? "0" : emailField.split("_")[1]
-          item[`is_email_valid_${index}`] = isValid
+item[`is_${emailField}_valid`] = isValid
 
           if (isValid && !hasValidEmail) {
             hasValidEmail = true
