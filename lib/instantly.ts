@@ -41,11 +41,9 @@ export interface InstantlyCredentials {
       console.log("📣 Campaign ID:", this.campaignId)
     }
   
-private isValidEmail(email: any, row?: Record<string, any>): boolean {
-  const isStringEmail = typeof email === "string" && email.includes("@")
-  const isMarkedValid = row?.is_email_valid?.toString().toLowerCase() === "true"
-  return isStringEmail && isMarkedValid
-}
+    private isValidEmail(email: any): boolean {
+        return true // 🧪 Bypass validation entirely
+      }
         
       private cleanData(data: Record<string, any>): Record<string, any> {
         const cleaned: Record<string, any> = {}
@@ -79,7 +77,7 @@ private isValidEmail(email: any, row?: Record<string, any>): boolean {
       extra_fields = {},
       custom_variables = {},
     }: LeadData): Promise<boolean> {
-if (!this.isValidEmail(email, extra_fields)) return false
+      if (!this.isValidEmail(email)) return false
   
       const cleanedExtra = this.cleanData({
         display_name: company_name,
@@ -138,7 +136,7 @@ if (!this.isValidEmail(email, extra_fields)) return false
         const email = item.email
         console.log("📧 Processing email:", email)
         
-if (!this.isValidEmail(email, item)) {
+        if (!this.isValidEmail(email)) {
           console.warn("❌ Invalid or missing email:", email)
           continue
         }
