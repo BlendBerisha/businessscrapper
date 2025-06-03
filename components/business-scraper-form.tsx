@@ -429,7 +429,7 @@ if (
       listId: formData.instantlyListId,
       campaignId: formData.instantlyCampaignId,
     })
-
+console.log(leadsToUpload);
     toast({
       title: "Data uploaded to Instantly",
       description: "Business data has been uploaded to Instantly campaign.",
