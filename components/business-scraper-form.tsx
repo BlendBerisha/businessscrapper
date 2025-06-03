@@ -388,28 +388,43 @@ if (
   });
 
   try {
-    const instantlyReadyData = (verifiedData || filteredData)
-      .map((item) => {
-        const email =
-          item.email ||
-          item.email_1 ||
-          item.email_2 ||
-          item.email_3 ||
-          "";
-        return { ...item, email };
-      })
-      .filter((item) => item.email && item.email.includes("@")); // ✅ Filter empty or invalid emails
+const instantlyReadyData = (verifiedData || filteredData)
+  .map((item) => {
+    const email =
+      item.email ||
+      item.email_1 ||
+      item.email_2 ||
+      item.email_3 ||
+      "";
+    return { ...item, email };
+  });
 
-    console.log("✅ Leads to Instantly:", instantlyReadyData.length);
-    if (instantlyReadyData.length === 0) {
-      throw new Error("No valid emails found for Instantly upload.");
-    }
+console.log("📨 Sample emails before filtering:", instantlyReadyData.slice(0, 5));
 
-    await uploadToInstantly(instantlyReadyData, {
-      apiKey: formData.instantlyApiKey,
-      listId: formData.instantlyListId,
-      campaignId: formData.instantlyCampaignId,
-    });
+const filteredLeads = instantlyReadyData.filter(
+  (item) => item.email && item.email.includes("@")
+);
+
+console.log("✅ Valid leads for Instantly:", filteredLeads.length);
+
+if (filteredLeads.length === 0) {
+  throw new Error("No valid emails found for Instantly upload.");
+}
+
+
+await uploadToInstantly(
+  (verifiedData || filteredData)
+    .map((item) => {
+      const email = item.email || item.email_1 || item.email_2 || item.email_3 || ""
+      return { ...item, email }
+    })
+    .filter((item) => item.email.includes("@")),
+  {
+    apiKey: formData.instantlyApiKey,
+    listId: formData.instantlyListId,
+    campaignId: formData.instantlyCampaignId,
+  }
+)
 
     toast({
       title: "Data uploaded to Instantly",
