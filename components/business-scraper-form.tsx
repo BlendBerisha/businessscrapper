@@ -399,23 +399,25 @@ if (
     for (const item of verifiedData || filteredData) {
       const emailFields = ["email", "email_1", "email_2", "email_3"]
 
-      for (const field of emailFields) {
-        const email = item[field]
-        const isValidKey = `is_${field}_valid`
+for (const field of emailFields) {
+  const email = item[field]
+  const isValidKey = `is_${field}_valid`
+  console.log({ field, email, isValid: item[isValidKey] })
 
-        if (
-          email &&
-          typeof email === "string" &&
-          email.includes("@") &&
-          (item[isValidKey] === true || item[isValidKey] === "true")
-        ) {
-          leadsToUpload.push({
-            ...item,
-            email,
-          })
-          break // ✅ Only take first valid email per row
-        }
-      }
+  if (
+    email &&
+    typeof email === "string" &&
+    email.includes("@") &&
+    (item[isValidKey] === true || item[isValidKey] === "true")
+  ) {
+    leadsToUpload.push({
+      ...item,
+      email,
+    })
+    break
+  }
+}
+
     }
 
     console.log("✅ Valid verified leads for Instantly:", leadsToUpload.length)
@@ -429,7 +431,7 @@ if (
       listId: formData.instantlyListId,
       campaignId: formData.instantlyCampaignId,
     })
-console.log(leadsToUpload);
+
     toast({
       title: "Data uploaded to Instantly",
       description: "Business data has been uploaded to Instantly campaign.",
