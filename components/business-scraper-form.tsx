@@ -277,18 +277,27 @@ const handleSubmit = async (e: React.FormEvent) => {
             description: "Processing email verification...",
           })
     
-          verifiedData = await verifyEmails(filteredData, formData.millionApiKey)
-          console.log("📧 Verified data:", verifiedData)
-    
-          setBusinessData(verifiedData)
-    
-await convertAndVerifyJson(verifiedData, formData.millionApiKey)
-    
-          toast({
-            title: "Emails verified",
-            description: "Verification completed. Files saved.",
-            variant: "success",
-          })
+// 1) First do your server‐side verify (million‐verifier)
+verifiedData = await verifyEmails(filteredData, formData.millionApiKey)
+setBusinessData(verifiedData)
+
+// 2) Now run the client‐side verification + XLSX/JSON downloads,
+//    and capture the returned `updatedWithEmails` array
+const updatedArray = await convertAndVerifyJson(
+  verifiedData,
+  formData.millionApiKey
+)
+
+// 3) Overwrite `verifiedData` with that array—this one actually has
+//    each row’s `is_email_valid` (true/false) set correctly.
+verifiedData = updatedArray
+setBusinessData(verifiedData)
+
+toast({
+  title: "Emails verified",
+  description: "Verification completed. Files saved.",
+  variant: "success",
+})
         } catch (error) {
           console.error("Error verifying emails:", error)
           toast({
@@ -383,51 +392,26 @@ if (
   formData.instantlyApiKey &&
   formData.instantlyCampaignId
 ) {
-  toast({
-    title: "Uploading to campaign",
-    description: "Adding data to Instantly campaign...",
-  })
-
+  // … toast …
   try {
-    console.log("✅ Total rows before filtering:", verifiedData.length);
-console.log(
-  "✅ Count of valid rows:",
-  verifiedData.filter((item) => item.is_email_valid === true).length
-);
-console.log(
-  "🔍 Example rows with flags:",
-  verifiedData.slice(0, 10).map((item) => ({
-    email: item.email,
-    is_email_valid: item.is_email_valid,
-  }))
-);
-
-    // 1) Filter for is_email_valid === true
-    const onlyValidRows = (verifiedData || filteredData).filter(
+    const onlyValidRows = verifiedData.filter(
       (item) => item.is_email_valid === true
     )
-
-    // 2) Map those valid rows into the shape Instantly expects
-    const instantlyReadyData = onlyValidRows
-      .map((item) => {
-        // After verification, `item.email` should already be the chosen valid address.
-        const email = item.email?.trim() ?? ""
-        return {
-          email,
-          first_name: item.email_first_name || email.split("@")[0] || "Unknown",
-          last_name: item.email_last_name || "",
-          custom_variables: {
-            company: item.company_name || item.display_name || "",
-            phone: item.phone || "",
-            city: item.city || "",
-            country: item.country || "",
-            website: item.site || "",
-          },
-        }
-      })
-      // 3) Final sanity check: ensure we have an “@” in the email string
-      .filter((item) => item.email && item.email.includes("@"))
-
+    const instantlyReadyData = onlyValidRows.map((item) => {
+      const email = item.email?.trim() ?? ""
+      return {
+        email,
+        first_name: item.email_first_name || email.split("@")[0] || "Unknown",
+        last_name: item.email_last_name || "",
+        custom_variables: {
+          company: item.company_name || item.display_name || "",
+          phone: item.phone || "",
+          city: item.city || "",
+          country: item.country || "",
+          website: item.site || "",
+        },
+      }
+    }).filter((item) => item.email && item.email.includes("@"))
     await uploadToInstantly(instantlyReadyData, {
       apiKey: formData.instantlyApiKey,
       listId: formData.instantlyListId,
