@@ -124,37 +124,40 @@ const handler: Handler = async () => {
     const verifiedData: any[] = []
 
     for (const item of businessData) {
-      const emailRaw = item.email || item.email_1 || item.email_2 || item.email_3
-      const email = typeof emailRaw === "string" && emailRaw.includes("@") ? emailRaw.trim() : null
-    
-      let isValid = false
-      if (email) {
-        try {
-          const response = await fetch("https://api.millionverifier.com/api/v3/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              api: mvKey,
-              email,
-            }),
-          })
-          const result = await response.json()
-    
-          isValid =
-            ["ok", "valid"].includes(result.result?.toLowerCase?.()) &&
-            result.quality?.toLowerCase?.() !== "risky"
-    
-          console.log(`📧 ${email} → ${result.result}/${result.quality} → valid:`, isValid)
-        } catch (err) {
-          console.error("❌ Email verification failed for", email, err)
-        }
-      }
-    
-      verifiedData.push({
-        ...item,
-        email: email || "",
-        is_email_valid: isValid,
+const emailFields = ["email", "email_1", "email_2", "email_3"]
+const verifiedItem = { ...item }
+
+for (const field of emailFields) {
+  const email = item[field]
+  const isValidKey = `is_${field}_valid`
+
+  if (email && typeof email === "string" && email.includes("@")) {
+    try {
+      const response = await fetch("https://api.millionverifier.com/api/v3/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api: mvKey,
+          email,
+        }),
       })
+      const result = await response.json()
+
+      const isValid =
+        ["ok", "valid"].includes(result.result?.toLowerCase?.()) &&
+        result.quality?.toLowerCase?.() !== "risky"
+
+      verifiedItem[isValidKey] = isValid
+
+      console.log(`📧 ${email} → ${result.result}/${result.quality} → ${isValidKey}:`, isValid)
+    } catch (err) {
+      console.error(`❌ Email verification failed for ${field}:`, err)
+      verifiedItem[isValidKey] = false
+    }
+  }
+}
+
+verifiedData.push(verifiedItem)
     }
     
     // ✅ EXPORT TO XLSX
