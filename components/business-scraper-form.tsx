@@ -381,6 +381,7 @@ await convertAndVerifyJson(
     }
     
     // ✅ Step 3: Upload to Instantly
+// ✅ Step 3: Upload to Instantly
 if (
   formData.addtocampaign &&
   formData.connectColdEmail &&
@@ -390,82 +391,68 @@ if (
   toast({
     title: "Uploading to campaign",
     description: "Adding data to Instantly campaign...",
-  });
+  })
 
   try {
-const instantlyReadyData = (verifiedData || filteredData)
-  .map((item) => {
-    const email =
-      item.email ||
-      item.email_1 ||
-      item.email_2 ||
-      item.email_3 ||
-      "";
-    return { ...item, email };
-  });
+    const leadsToUpload: any[] = []
 
-console.log("📨 Sample emails before filtering:", instantlyReadyData.slice(0, 5));
+    for (const item of verifiedData || filteredData) {
+      const emailFields = ["email", "email_1", "email_2", "email_3"]
 
-const filteredLeads = instantlyReadyData.filter(
-  (item) => item.email && item.email.includes("@")
-);
+      for (const field of emailFields) {
+        const email = item[field]
+        const isValidKey = `is_${field}_valid`
 
-console.log("✅ Valid leads for Instantly:", filteredLeads.length);
-
-if (filteredLeads.length === 0) {
-  throw new Error("No valid emails found for Instantly upload.");
-}
-
-
-const leadsToUpload: any[] = []
-
-for (const item of verifiedData || filteredData) {
-  const emailFields = ["email", "email_1", "email_2", "email_3"]
-
-  for (const field of emailFields) {
-    const email = item[field]
-    const isValidKey = `is_${field}_valid` // e.g., is_email_1_valid
-
-    if (
-      email &&
-      typeof email === "string" &&
-      email.includes("@") &&
-      (item[isValidKey] === true || item[isValidKey] === "true")
-    ) {
-      leadsToUpload.push({
-        ...item,
-        email,
-      })
-      break // ✅ Use only one valid email per item
+        if (
+          email &&
+          typeof email === "string" &&
+          email.includes("@") &&
+          (item[isValidKey] === true || item[isValidKey] === "true")
+        ) {
+          leadsToUpload.push({
+            ...item,
+            email,
+          })
+          break // ✅ Only take first valid email per row
+        }
+      }
     }
-  }
-}
 
-if (leadsToUpload.length === 0) {
-  throw new Error("No verified emails found in any column.")
-}
+    console.log("✅ Valid verified leads for Instantly:", leadsToUpload.length)
 
-await uploadToInstantly(leadsToUpload, {
-  apiKey: formData.instantlyApiKey,
-  listId: formData.instantlyListId,
-  campaignId: formData.instantlyCampaignId,
-})
+    if (leadsToUpload.length === 0) {
+      throw new Error("No valid, verified emails found for Instantly upload.")
+    }
+
+    await uploadToInstantly(leadsToUpload, {
+      apiKey: formData.instantlyApiKey,
+      listId: formData.instantlyListId,
+      campaignId: formData.instantlyCampaignId,
+    })
 
     toast({
       title: "Data uploaded to Instantly",
       description: "Business data has been uploaded to Instantly campaign.",
       variant: "success",
-    });
+    })
   } catch (error) {
-    console.error("Error uploading to Instantly:", error);
+    console.error("Error uploading to Instantly:", error)
     toast({
       title: "Instantly upload error",
       description:
         "Failed to upload data to Instantly. Check your credentials or email data.",
       variant: "destructive",
-    });
+    })
   }
 } else if (formData.addtocampaign && formData.connectColdEmail) {
+  toast({
+    title: "Instantly upload skipped",
+    description:
+      "Instantly API credentials are not fully configured. Please add them in Settings.",
+    variant: "destructive",
+  })
+}
+else if (formData.addtocampaign && formData.connectColdEmail) {
   toast({
     title: "Instantly upload skipped",
     description:
