@@ -282,7 +282,12 @@ const handleSubmit = async (e: React.FormEvent) => {
     
           setBusinessData(verifiedData)
     
-await convertAndVerifyJson(verifiedData, formData.millionApiKey)
+await convertAndVerifyJson(
+  verifiedData,
+  formData.millionApiKey,
+  formData.jsonFileName || "business.json",
+  formData.csvFileName || "business.xlsx"
+)
     
           toast({
             title: "Emails verified",
