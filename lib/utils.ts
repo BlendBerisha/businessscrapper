@@ -258,7 +258,12 @@ export function getNormalizedColumn(row: Record<string, any>, targetKey: string)
 }
 
 
-export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
+export async function convertAndVerifyJson(
+  jsonData: any[],
+  apiKey: string,
+  jsonFileName: string = "business-verified-clean.json",
+  xlsxFileName: string = "business-verified-clean.xlsx"
+) {
   if (typeof window === "undefined") return
 
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
@@ -331,7 +336,7 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
   const xlsxUrl = URL.createObjectURL(xlsxBlob)
   const a1 = document.createElement("a")
   a1.href = xlsxUrl
-  a1.download = "business-verified-clean.xlsx"
+  a1.download = xlsxFileName.endsWith(".xlsx") ? xlsxFileName : `${xlsxFileName}.xlsx`
   document.body.appendChild(a1)
   a1.click()
   document.body.removeChild(a1)
@@ -344,7 +349,7 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
   const jsonUrl = URL.createObjectURL(jsonBlob)
   const a2 = document.createElement("a")
   a2.href = jsonUrl
-  a2.download = "business-verified-clean.json"
+  a2.download = jsonFileName.endsWith(".json") ? jsonFileName : `${jsonFileName}.json`
   document.body.appendChild(a2)
   a2.click()
   document.body.removeChild(a2)
