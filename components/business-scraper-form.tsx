@@ -417,19 +417,32 @@ if (filteredLeads.length === 0) {
 }
 
 
-const leadsToUpload = (verifiedData || filteredData)
-  .map((item) => ({
-    ...item,
-    email: item.email || item.email_1 || item.email_2 || item.email_3 || "",
-  }))
-  .filter(
-    (item) =>
-      item.email.includes("@") &&
-      (item.is_email_valid === true || item.is_email_valid === "true")
-  )
+const leadsToUpload: any[] = []
+
+for (const item of verifiedData || filteredData) {
+  const emailFields = ["email", "email_1", "email_2", "email_3"]
+
+  for (const field of emailFields) {
+    const email = item[field]
+    const isValidKey = `is_${field}_valid` // e.g., is_email_1_valid
+
+    if (
+      email &&
+      typeof email === "string" &&
+      email.includes("@") &&
+      (item[isValidKey] === true || item[isValidKey] === "true")
+    ) {
+      leadsToUpload.push({
+        ...item,
+        email,
+      })
+      break // ✅ Use only one valid email per item
+    }
+  }
+}
 
 if (leadsToUpload.length === 0) {
-  throw new Error("No valid, verified emails found for Instantly upload.")
+  throw new Error("No verified emails found in any column.")
 }
 
 await uploadToInstantly(leadsToUpload, {
