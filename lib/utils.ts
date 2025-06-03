@@ -269,61 +269,18 @@ export async function convertAndVerifyJson(
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
   const workbook = XLSX.utils.book_new()
 
-  // 🔍 Extract emails
-  const emailSet = new Set<string>()
-  jsonData.forEach((row) => {
-    Object.keys(row).forEach((key) => {
-      if (key.toLowerCase().startsWith("email") && typeof row[key] === "string") {
-        const email = row[key].trim()
-        if (email.includes("@")) emailSet.add(email)
-      }
-    })
-  })
+  // ► No second-round of /api/verify-email calls; trust `jsonData[].is_email_valid` as-is
+  // ► Just build the “With Emails” sheet using whatever is_email_valid the caller already assigned.
 
-  // ✅ Verify emails
-  const verifiedResults: { email: string; is_email_valid: boolean }[] = []
-  for (const email of emailSet) {
-    try {
-      const res = await fetch("/api/verify-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, apiKey }),
-      })
-      const result = await res.json()
-      const isValid =
-        ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-        result.quality?.toLowerCase?.() !== "risky"
-
-      verifiedResults.push({ email, is_email_valid: isValid })
-    } catch (err) {
-      console.error("❌ Error verifying:", email, err)
-      verifiedResults.push({ email, is_email_valid: false })
-    }
-  }
-
-  // 🔁 Map and overwrite is_email_valid in With Emails
-  const emailValidationMap = Object.fromEntries(
-    verifiedResults.map(({ email, is_email_valid }) => [email.toLowerCase(), is_email_valid])
-  )
-
-  const updatedWithEmails = withEmails.map((row) => {
-    const email = row.email?.toLowerCase?.()
-    if (email && emailValidationMap[email] !== undefined) {
-      return { ...row, is_email_valid: emailValidationMap[email] }
-    }
-    return row
-  })
-
-  // ✅ Append updated sheets
-  if (updatedWithEmails.length > 0) {
-    const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
+  if (withEmails.length > 0) {
+    const sheetWith = XLSX.utils.json_to_sheet(withEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
   }
   if (withoutEmails.length > 0) {
     const sheetWithout = XLSX.utils.json_to_sheet(withoutEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWithout, "No Emails")
   }
-  if (updatedWithEmails.length === 0 && withoutEmails.length === 0) {
+  if (withEmails.length === 0 && withoutEmails.length === 0) {
     const sheetEmpty = XLSX.utils.aoa_to_sheet([["No data available"]])
     XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
   }
@@ -342,8 +299,8 @@ export async function convertAndVerifyJson(
   document.body.removeChild(a1)
   URL.revokeObjectURL(xlsxUrl)
 
-  // ⬇️ Download verified .json
-  const jsonBlob = new Blob([JSON.stringify(updatedWithEmails, null, 2)], {
+  // ⬇️ Download JSON (only “withEmails,” which already has `is_email_valid` flags)
+  const jsonBlob = new Blob([JSON.stringify(withEmails, null, 2)], {
     type: "application/json",
   })
   const jsonUrl = URL.createObjectURL(jsonBlob)

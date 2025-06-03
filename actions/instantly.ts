@@ -16,33 +16,5 @@ export async function uploadToInstantly(
 
   const instantly = new InstantlyAPI({ apiKey, listId, campaignId })
 
-  const leadsToUpload: any[] = []
-
-  for (const item of businessData) {
-    const emailFields = ["email", "email_1", "email_2", "email_3"]
-
-    for (const field of emailFields) {
-      const email = item[field]
-      const isValidKey = `is_${field}_valid`
-
-      if (
-        email &&
-        typeof email === "string" &&
-        email.includes("@") &&
-        (item[isValidKey] === true || item[isValidKey] === "true")
-      ) {
-        leadsToUpload.push({
-          ...item,
-          email,
-        })
-        break // ✅ Only upload first valid email per item
-      }
-    }
-  }
-
-  if (leadsToUpload.length === 0) {
-    throw new Error("No valid verified emails found for upload.")
-  }
-
-  return await instantly.addLeadsFromData(leadsToUpload)
+  return await instantly.addLeadsFromData(businessData)
 }

@@ -41,9 +41,11 @@ export interface InstantlyCredentials {
       console.log("📣 Campaign ID:", this.campaignId)
     }
   
-    private isValidEmail(email: any): boolean {
-        return true // 🧪 Bypass validation entirely
-      }
+private isValidEmail(email: any): boolean {
+  if (typeof email !== "string") return false
+  // Basic check: must include “@” and no spaces
+  return email.includes("@") && email.indexOf(" ") === -1
+}
         
       private cleanData(data: Record<string, any>): Record<string, any> {
         const cleaned: Record<string, any> = {}
