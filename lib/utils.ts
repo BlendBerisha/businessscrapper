@@ -323,18 +323,30 @@ export async function convertAndVerifyJson(jsonData: any[], apiKey: string) {
     XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
   }
 
-  // ⬇️ Download the final file (NO "Verified Emails" sheet)
-  const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
-  const blob = new Blob([buffer], {
+  // ⬇️ Download .xlsx
+  const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
+  const xlsxBlob = new Blob([xlsxBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   })
+  const xlsxUrl = URL.createObjectURL(xlsxBlob)
+  const a1 = document.createElement("a")
+  a1.href = xlsxUrl
+  a1.download = "business-verified-clean.xlsx"
+  document.body.appendChild(a1)
+  a1.click()
+  document.body.removeChild(a1)
+  URL.revokeObjectURL(xlsxUrl)
 
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = "business-verified-clean.xlsx"
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  // ⬇️ Download verified .json
+  const jsonBlob = new Blob([JSON.stringify(updatedWithEmails, null, 2)], {
+    type: "application/json",
+  })
+  const jsonUrl = URL.createObjectURL(jsonBlob)
+  const a2 = document.createElement("a")
+  a2.href = jsonUrl
+  a2.download = "business-verified-clean.json"
+  document.body.appendChild(a2)
+  a2.click()
+  document.body.removeChild(a2)
+  URL.revokeObjectURL(jsonUrl)
 }
