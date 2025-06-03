@@ -412,19 +412,22 @@ if (filteredLeads.length === 0) {
 }
 
 
-await uploadToInstantly(
-  (verifiedData || filteredData)
-    .map((item) => {
-      const email = item.email || item.email_1 || item.email_2 || item.email_3 || ""
-      return { ...item, email }
-    })
-    .filter((item) => item.email.includes("@")),
-  {
-    apiKey: formData.instantlyApiKey,
-    listId: formData.instantlyListId,
-    campaignId: formData.instantlyCampaignId,
-  }
-)
+const leadsToUpload = (verifiedData || filteredData)
+  .map((item) => {
+    const email = item.email || item.email_1 || item.email_2 || item.email_3 || ""
+    return { ...item, email }
+  })
+  .filter((item) => item.email.includes("@") && item.is_email_valid === true)
+
+if (leadsToUpload.length === 0) {
+  throw new Error("No valid emails with is_email_valid=true found for Instantly upload.")
+}
+
+await uploadToInstantly(leadsToUpload, {
+  apiKey: formData.instantlyApiKey,
+  listId: formData.instantlyListId,
+  campaignId: formData.instantlyCampaignId,
+})
 
     toast({
       title: "Data uploaded to Instantly",
