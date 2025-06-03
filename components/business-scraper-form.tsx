@@ -376,65 +376,63 @@ await convertAndVerifyJson(verifiedData, formData.millionApiKey)
     }
     
     // ✅ Step 3: Upload to Instantly
-  if (
+if (
   formData.addtocampaign &&
   formData.connectColdEmail &&
   formData.instantlyApiKey &&
   formData.instantlyCampaignId
-)
-{
-      toast({
-        title: "Uploading to campaign",
-        description: "Adding data to Instantly campaign...",
-      })
-    
-      try {
-const instantlyReadyData = (verifiedData || filteredData)
-  .map((item) => {
-    const email =
-      item.email_1 || item.email || item.email_2 || item.email_3 || ""
+) {
+  toast({
+    title: "Uploading to campaign",
+    description: "Adding data to Instantly campaign...",
+  });
 
-    return {
-      email,
-      first_name: item.first_name || email.split("@")[0],
-      last_name: item.last_name || "",
-      custom_variables: {
-        company: item.company_name || item.display_name || "",
-        phone: item.phone || "",
-        city: item.city || "",
-        country: item.country || "",
-        website: item.website || "",
-      },
-    }
-  })
-  .filter((item) => item.email && item.email.includes("@"))
-    
-        await uploadToInstantly(instantlyReadyData, {
-          apiKey: formData.instantlyApiKey,
-          listId: formData.instantlyListId,
-          campaignId: formData.instantlyCampaignId,
-        })
-    
-        toast({
-          title: "Data uploaded to Instantly",
-          description: "Business data has been uploaded to Instantly campaign.",
-          variant: "success",
-        })
-      } catch (error) {
-        console.error("Error uploading to Instantly:", error)
-        toast({
-          title: "Instantly upload error",
-          description: "Failed to upload data to Instantly. Check your credentials.",
-          variant: "destructive",
-        })
-      }
-    } else if (formData.addtocampaign && formData.connectColdEmail) {
-      toast({
-        title: "Instantly upload skipped",
-        description: "Instantly API credentials are not fully configured. Please add them in Settings.",
-        variant: "destructive",
+  try {
+    const instantlyReadyData = (verifiedData || filteredData)
+      .map((item) => {
+        const email =
+          item.email ||
+          item.email_1 ||
+          item.email_2 ||
+          item.email_3 ||
+          "";
+        return { ...item, email };
       })
+      .filter((item) => item.email && item.email.includes("@")); // ✅ Filter empty or invalid emails
+
+    console.log("✅ Leads to Instantly:", instantlyReadyData.length);
+    if (instantlyReadyData.length === 0) {
+      throw new Error("No valid emails found for Instantly upload.");
     }
+
+    await uploadToInstantly(instantlyReadyData, {
+      apiKey: formData.instantlyApiKey,
+      listId: formData.instantlyListId,
+      campaignId: formData.instantlyCampaignId,
+    });
+
+    toast({
+      title: "Data uploaded to Instantly",
+      description: "Business data has been uploaded to Instantly campaign.",
+      variant: "success",
+    });
+  } catch (error) {
+    console.error("Error uploading to Instantly:", error);
+    toast({
+      title: "Instantly upload error",
+      description:
+        "Failed to upload data to Instantly. Check your credentials or email data.",
+      variant: "destructive",
+    });
+  }
+} else if (formData.addtocampaign && formData.connectColdEmail) {
+  toast({
+    title: "Instantly upload skipped",
+    description:
+      "Instantly API credentials are not fully configured. Please add them in Settings.",
+    variant: "destructive",
+  });
+}
     
     setHasData(true)
 
