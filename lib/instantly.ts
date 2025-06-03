@@ -42,7 +42,7 @@ export class InstantlyAPI {
   }
 
   private isValidEmail(email: any): boolean {
-    return true // 🧪 Bypass format validation, assuming Million Verifier is trusted
+    return true // 🧪 Bypass validation entirely
   }
 
   private cleanData(data: Record<string, any>): Record<string, any> {
@@ -58,7 +58,6 @@ export class InstantlyAPI {
       } else if (value === undefined) {
         cleaned[key] = null
       } else {
-        // Convert objects/arrays to JSON strings
         cleaned[key] = JSON.stringify(value)
       }
     }
@@ -129,17 +128,18 @@ export class InstantlyAPI {
     const successful: string[] = []
     const failed: string[] = []
 
-    // Only keep entries where email is marked valid
-    const validData = data.filter(item => item.is_email_valid === true)
+    console.log(`📥 Starting upload of ${data.length} leads to Instantly`)
 
-    console.log(`📥 Starting upload of ${validData.length} verified leads to Instantly`)
-
-    for (const item of validData) {
+    for (const item of data) {
       const email = item.email
-      console.log("📧 Processing email:", email)
+
+      if (item.is_email_valid !== true) {
+        console.log("⛔ Skipping invalid email:", email)
+        continue
+      }
 
       if (!this.isValidEmail(email)) {
-        console.warn("❌ Invalid or missing email format:", email)
+        console.warn("❌ Invalid or missing email:", email)
         continue
       }
 
