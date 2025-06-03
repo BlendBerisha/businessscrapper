@@ -164,45 +164,4 @@ export interface InstantlyCredentials {
     }
   }
   
-  export async function uploadToInstantlyVerifiedOnly(
-  businessData: any[],
-  credentials?: Partial<InstantlyCredentials>
-) {
-  const apiKey = credentials?.apiKey || process.env.INSTANTLY_API_KEY!
-  const listId = credentials?.listId || process.env.INSTANTLY_LIST_ID!
-  const campaignId = credentials?.campaignId || process.env.INSTANTLY_CAMPAIGN_ID!
-
-  if (!apiKey || !listId || !campaignId) {
-    throw new Error("Instantly credentials missing")
-  }
-
-  const instantly = new InstantlyAPI({ apiKey, listId, campaignId })
-
-  const filtered: LeadData[] = businessData
-    .filter((entry) => entry.is_email_valid === true)
-    .map((entry) => ({
-      email: entry.email,
-      company_name: entry.display_name || "",
-      phone: entry.phone || "",
-      website: entry.site || "",
-      personalization: `Hello ${entry.email_first_name || ""}, I wanted to connect.`,
-      first_name: entry.email_first_name || "",
-      last_name: entry.email_last_name || "",
-      extra_fields: entry,
-      custom_variables: { ...entry },
-    }))
-
-  if (filtered.length === 0) {
-    console.warn("⚠️ No verified emails found to upload.")
-    return
-  }
-
-  for (const lead of filtered) {
-    try {
-      await instantly.addLead(lead)
-      console.log(`✅ Uploaded lead: ${lead.email}`)
-    } catch (err) {
-      console.error(`❌ Failed to upload: ${lead.email}`, err)
-    }
-  }
-}
+  
