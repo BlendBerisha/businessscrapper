@@ -152,12 +152,13 @@ export class InstantlyAPI {
     console.log(`📥 Preparing upload of leads to Instantly...`)
 
 for (const row of data) {
-  for (const [emailKey, titleKey, firstNameKey, lastNameKey] of emailGroups) {
+  for (const [index, [emailKey, titleKey, firstNameKey, lastNameKey]] of emailGroups.entries()) {
     const email = row[emailKey]?.trim()
     if (!email || !this.isValidEmail(email) || seenEmails.has(email)) continue
 
-const isValidFlag = String(row.is_email_valid)?.toLowerCase?.()
-if (isValidFlag !== "true") continue
+    const isValidKey = `is_email_valid_${index}` // dynamically check per email
+    const isValidFlag = String(row[isValidKey])?.toLowerCase?.()
+    if (isValidFlag !== "true") continue
 
     seenEmails.add(email)
 
@@ -174,7 +175,7 @@ if (isValidFlag !== "true") continue
         email_title: row[titleKey] || "",
         email_first_name: row[firstNameKey] || "",
         email_last_name: row[lastNameKey] || "",
-        is_email_valid: row.is_email_valid || false,
+        is_email_valid: row[isValidKey] || false,
         enrich_area_codes: row["enrich area codes"] || "",
       },
     }
