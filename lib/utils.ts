@@ -264,28 +264,78 @@ export async function convertAndVerifyJson(
   jsonFileName: string = "business-verified-clean.json",
   xlsxFileName: string = "business-verified-clean.xlsx"
 ) {
+  // Bail early on SSR
   if (typeof window === "undefined") return
 
+  // 1) Split into “With Emails” vs “No Emails” exactly as before
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
   const workbook = XLSX.utils.book_new()
 
-  // ► No second-round of /api/verify-email calls; trust `jsonData[].is_email_valid` as-is
-  // ► Just build the “With Emails” sheet using whatever is_email_valid the caller already assigned.
+  // 2) Create a list of { email, rowIndex } for every “primary” email in withEmails
+  //    (i.e. each row in withEmails already has a single .email value)
+  const emailList: { email: string; idx: number }[] = []
+  withEmails.forEach((row, idx) => {
+    const e = (row.email as string)?.trim() ?? ""
+    if (e.includes("@")) {
+      emailList.push({ email: e, idx })
+    }
+  })
 
-  if (withEmails.length > 0) {
-    const sheetWith = XLSX.utils.json_to_sheet(withEmails)
+  // 3) Run the client-side /api/verify-email loop only on those primary emails
+  const verifiedResults: { email: string; is_email_valid: boolean }[] = []
+  for (const { email } of emailList) {
+    try {
+      const res = await fetch("/api/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, apiKey }),
+      })
+      const result = await res.json()
+      const isValid =
+        ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+        result.quality?.toLowerCase?.() !== "risky"
+
+      verifiedResults.push({ email, is_email_valid: isValid })
+    } catch (err) {
+      console.error("❌ Error verifying:", email, err)
+      verifiedResults.push({ email, is_email_valid: false })
+    }
+  }
+
+  // 4) Build a quick lookup so we know which primary emails passed
+  const validationMap = Object.fromEntries(
+    verifiedResults.map(({ email, is_email_valid }) => [email.toLowerCase(), is_email_valid])
+  )
+
+  // 5) Overwrite each row’s is_email_valid in withEmails based on that lookup
+  const updatedWithEmails = withEmails.map((row) => {
+    const lower = (row.email as string)?.toLowerCase?.() ?? ""
+    if (lower && validationMap[lower] !== undefined) {
+      return { ...row, is_email_valid: validationMap[lower] }
+    }
+    // If there was no matching entry (e.g. email was malformed), leave it false
+    return { ...row, is_email_valid: false }
+  })
+
+  // 6) Append the “With Emails” sheet with updated flags
+  if (updatedWithEmails.length > 0) {
+    const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
   }
+
+  // 7) Append the “No Emails” sheet exactly as before (all is_email_valid = false)
   if (withoutEmails.length > 0) {
-    const sheetWithout = XLSX.utils.json_to_sheet(withoutEmails)
-    XLSX.utils.book_append_sheet(workbook, sheetWithout, "No Emails")
+    const sheetNo = XLSX.utils.json_to_sheet(withoutEmails)
+    XLSX.utils.book_append_sheet(workbook, sheetNo, "No Emails")
   }
-  if (withEmails.length === 0 && withoutEmails.length === 0) {
+
+  // 8) If nothing at all, write a “No Data” placeholder
+  if (updatedWithEmails.length === 0 && withoutEmails.length === 0) {
     const sheetEmpty = XLSX.utils.aoa_to_sheet([["No data available"]])
     XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
   }
 
-  // ⬇️ Download .xlsx
+  // 9) Download the final .xlsx
   const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
   const xlsxBlob = new Blob([xlsxBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -299,8 +349,8 @@ export async function convertAndVerifyJson(
   document.body.removeChild(a1)
   URL.revokeObjectURL(xlsxUrl)
 
-  // ⬇️ Download JSON (only “withEmails,” which already has `is_email_valid` flags)
-  const jsonBlob = new Blob([JSON.stringify(withEmails, null, 2)], {
+  // 10) Download the verified JSON (only the updatedWithEmails array, which now has correct is_email_valid flags)
+  const jsonBlob = new Blob([JSON.stringify(updatedWithEmails, null, 2)], {
     type: "application/json",
   })
   const jsonUrl = URL.createObjectURL(jsonBlob)
