@@ -389,6 +389,19 @@ if (
   })
 
   try {
+    console.log("✅ Total rows before filtering:", verifiedData.length);
+console.log(
+  "✅ Count of valid rows:",
+  verifiedData.filter((item) => item.is_email_valid === true).length
+);
+console.log(
+  "🔍 Example rows with flags:",
+  verifiedData.slice(0, 10).map((item) => ({
+    email: item.email,
+    is_email_valid: item.is_email_valid,
+  }))
+);
+
     // 1) Filter for is_email_valid === true
     const onlyValidRows = (verifiedData || filteredData).filter(
       (item) => item.is_email_valid === true

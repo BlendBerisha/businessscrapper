@@ -52,6 +52,13 @@ export async function verifyEmails(businessData: any[], apiKey?: string) {
 
     item.is_email_valid = hasValidEmail
   }
+console.log(
+  "— server‐side verifiedData sample:",
+  verifiedData.slice(0, 5).map((r) => ({
+    email: r.email,
+    is_email_valid: r.is_email_valid,
+  }))
+);
 
   return verifiedData
 }

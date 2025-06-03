@@ -290,12 +290,14 @@ export async function convertAndVerifyJson(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, apiKey }),
       })
-      const result = await res.json()
-      const isValid =
-        ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-        result.quality?.toLowerCase?.() !== "risky"
+const result = await res.json();
+console.log("— client verify response for", email, "→", result);
+const isValid =
+  ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+  result.quality?.toLowerCase?.() !== "risky";
 
-      verifiedResults.push({ email, is_email_valid: isValid })
+console.log("   → interpreted as is_email_valid =", isValid);
+verifiedResults.push({ email, is_email_valid: isValid });
     } catch (err) {
       console.error("❌ Error verifying:", email, err)
       verifiedResults.push({ email, is_email_valid: false })
