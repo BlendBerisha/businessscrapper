@@ -279,7 +279,7 @@ export async function convertAndVerifyJson(
     }
   })
 
-  // 3) Run the client‐side /api/verify-email loop on each primary email
+  // 3) Run the client‐side /api/verify-email loop on each primary email with delay
   const verifiedResults: { email: string; is_email_valid: boolean }[] = []
   for (const { email } of emailList) {
     try {
@@ -298,6 +298,9 @@ export async function convertAndVerifyJson(
       console.error("❌ Error verifying:", email, err)
       verifiedResults.push({ email, is_email_valid: false })
     }
+
+    // ⏱️ Add delay to prevent rate limits (adjust as needed)
+    await new Promise((res) => setTimeout(res, 300))
   }
 
   // 4) Create a lookup so we know which primary emails passed
