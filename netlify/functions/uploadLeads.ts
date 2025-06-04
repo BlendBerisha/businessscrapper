@@ -10,12 +10,13 @@ export const handler = async () => {
   try {
     console.log("🚀 Cron job started")
 
-    // ✅ HARDCODED Instantly credentials for testing
-    const instantlyApiKey = "MTgwNmVmMTAtNDljMS00MWI4LTgyNmItNDRkN2JjZGRiMDVmOkxTSERXbUJFbFdzcg=="
-    const instantlyListId = "7b0464c5-505c-4bc8-af80-cb02a92e216d"
-    const instantlyCampaignId = "206ef3de-d47a-47aa-9276-efb0b0b4d347"
+    const instantly = new InstantlyAPI({
+      apiKey: "MTgwNmVmMTAtNDljMS00MWI4LTgyNmItNDRkN2JjZGRiMDVmOlJlS3pjTXhiSEtmTA==",
+      listId: "7b0464c5-505c-4bc8-af80-cb02a92e216d",
+      campaignId: "206ef3de-d47a-47aa-9276-efb0b0b4d347"
+    })
 
-    console.log("🔍 Fetching leads from Supabase...")
+    console.log("🔍 Fetching valid leads...")
     const { data: leads, error: leadsError } = await supabase
       .from("verified_leads")
       .select("*")
@@ -23,61 +24,46 @@ export const handler = async () => {
       .eq("uploaded", false)
 
     if (leadsError) throw leadsError
-
-    console.log("🐞 Raw leads result:", leads)
-
-    if (!leads) {
-      console.log("❌ leads is undefined")
+    if (!leads || leads.length === 0) {
+      console.log("ℹ️ No new leads to upload.")
       return {
         statusCode: 200,
-        body: "No new leads (undefined)."
+        body: "No new leads to upload.",
       }
     }
 
-    if (leads.length === 0) {
-      console.log("ℹ️ leads array is empty")
-      return {
-        statusCode: 200,
-        body: "No new leads (0 length)."
-      }
-    }
-
-    console.log(`✅ Found ${leads.length} leads.`)
+    console.log(`✅ Found ${leads.length} valid leads.`)
 
     const batchSize = 50
     const batches = Array.from({ length: Math.ceil(leads.length / batchSize) }, (_, i) =>
       leads.slice(i * batchSize, i * batchSize + batchSize)
     )
 
-    console.log(`🔄 Uploading in ${batches.length} batches.`)
-
-    const instantly = new InstantlyAPI({
-      apiKey: instantlyApiKey,
-      listId: instantlyListId,
-      campaignId: instantlyCampaignId,
-    })
-
     for (const batch of batches) {
-      console.log(`📤 Uploading batch with ${batch.length} leads...`)
+      console.log(`📤 Uploading batch of ${batch.length} leads...`)
       try {
-        await instantly.addLeadsFromData(batch)
+        const result = await instantly.addLeadsFromData(batch)
+        console.log("✅ Instantly result:", result)
+
+        const uploadedIds = batch
+          .filter((lead) => result.success.includes(lead.email))
+          .map((lead) => lead.id)
+
+        if (uploadedIds.length > 0) {
+          await supabase
+            .from("verified_leads")
+            .update({ uploaded: true })
+            .in("id", uploadedIds)
+          console.log(`✅ Marked ${uploadedIds.length} leads as uploaded.`)
+        }
       } catch (uploadError) {
-        console.error("❌ Failed to upload to Instantly:", uploadError)
-        throw uploadError
+        console.error("❌ Failed to upload batch:", uploadError)
       }
-
-      const ids = batch.map((lead: any) => lead.id)
-      await supabase
-        .from("verified_leads")
-        .update({ uploaded: true })
-        .in("id", ids)
-
-      console.log("✅ Batch uploaded and marked as uploaded.")
     }
 
     return {
       statusCode: 200,
-      body: `✅ Uploaded ${leads.length} leads in ${batches.length} batches.`,
+      body: `✅ Uploaded ${leads.length} leads.`,
     }
 
   } catch (err: any) {
