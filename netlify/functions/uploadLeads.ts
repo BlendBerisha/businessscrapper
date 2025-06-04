@@ -10,34 +10,12 @@ export const handler = async () => {
   try {
     console.log("🚀 Cron job started")
 
-    console.log("🔍 Fetching scraperSettings...")
-    const { data: settingsRow, error: settingsError } = await supabase
-      .from("settings")
-      .select("value")
-      .eq("key", "scraperSettings")
-      .maybeSingle()
+    // ✅ HARDCODED Instantly credentials for testing
+    const instantlyApiKey = "MTgwNmVmMTAtNDljMS00MWI4LTgyNmItNDRkN2JjZGRiMDVmOkxTSERXbUJFbFdzcg=="
+    const instantlyListId = "7b0464c5-505c-4bc8-af80-cb02a92e216d"
+    const instantlyCampaignId = "206ef3de-d47a-47aa-9276-efb0b0b4d347"
 
-    if (settingsError || !settingsRow) {
-      throw new Error("❌ Missing scraperSettings in Supabase.")
-    }
-
-    const config = settingsRow.value
-
-    if (typeof config !== "object" || !config) {
-      throw new Error("❌ Config is not an object or is null.")
-    }
-
-    console.log("🧩 Config values:", {
-      instantlyApiKey: config.instantlyApiKey,
-      instantlyListId: config.instantlyListId,
-      instantlyCampaignId: config.instantlyCampaignId,
-    })
-
-    if (!config.instantlyApiKey || !config.instantlyListId || !config.instantlyCampaignId) {
-      throw new Error("❌ Instantly credentials are incomplete.")
-    }
-
-    console.log("🔍 Fetching leads...")
+    console.log("🔍 Fetching leads from Supabase...")
     const { data: leads, error: leadsError } = await supabase
       .from("verified_leads")
       .select("*")
@@ -74,9 +52,9 @@ export const handler = async () => {
     console.log(`🔄 Uploading in ${batches.length} batches.`)
 
     const instantly = new InstantlyAPI({
-      apiKey: config.instantlyApiKey,
-      listId: config.instantlyListId,
-      campaignId: config.instantlyCampaignId,
+      apiKey: instantlyApiKey,
+      listId: instantlyListId,
+      campaignId: instantlyCampaignId,
     })
 
     for (const batch of batches) {
