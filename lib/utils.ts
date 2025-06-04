@@ -329,10 +329,18 @@ const updatedWithEmails = withEmails.map((row) => {
 })
 
 // ✅ Save to Supabase for server-side full verification later
-await supabase.from("saved_json").insert({
-  json_data: updatedWithEmails,
-  verified: false
-})
+try {
+  const { error } = await supabase.from("saved_json").insert([
+    {
+      json_data: updatedWithEmails,
+      verified: false,
+      created_at: new Date().toISOString(),
+    },
+  ])
+  if (error) console.error("❌ Supabase insert in convertAndVerifyJson failed:", error.message)
+} catch (err) {
+  console.error("❌ Supabase insert threw error:", err)
+}
 
   // XLSX generation
   if (updatedWithEmails.length > 0) {
