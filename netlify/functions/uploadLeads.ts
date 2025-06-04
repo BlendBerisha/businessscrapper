@@ -8,6 +8,7 @@ const supabase = createClient(
 
 export const handler = async () => {
   try {
+    console.log("🔍 Fetching scraperSettings...")
     const { data: settingsRow, error: settingsError } = await supabase
       .from("settings")
       .select("value")
@@ -18,12 +19,15 @@ export const handler = async () => {
       throw new Error("❌ Missing Instantly configuration in Supabase.")
     }
 
+    console.log("✅ Settings found:", settingsRow)
+
     const config = settingsRow.value || {}
 
     if (!config.instantlyApiKey || !config.instantlyListId || !config.instantlyCampaignId) {
       throw new Error("❌ Instantly credentials are incomplete.")
     }
 
+    console.log("🔍 Fetching leads...")
     const { data: leads, error: leadsError } = await supabase
       .from("verified_leads")
       .select("*")
@@ -33,16 +37,21 @@ export const handler = async () => {
     if (leadsError) throw leadsError
 
     if (!leads || leads.length === 0) {
+      console.log("ℹ️ No leads to upload.")
       return {
         statusCode: 200,
         body: "No new leads to upload.",
       }
     }
 
+    console.log(`✅ Found ${leads.length} leads.`)
+
     const batchSize = 50
     const batches = Array.from({ length: Math.ceil(leads.length / batchSize) }, (_, i) =>
       leads.slice(i * batchSize, i * batchSize + batchSize)
     )
+
+    console.log(`🔄 Uploading in ${batches.length} batches.`)
 
     const instantly = new InstantlyAPI({
       apiKey: config.instantlyApiKey,
@@ -51,6 +60,7 @@ export const handler = async () => {
     })
 
     for (const batch of batches) {
+      console.log(`📤 Uploading batch with ${batch.length} leads...`)
       await instantly.addLeadsFromData(batch)
 
       const ids = batch.map((lead: any) => lead.id)
@@ -58,6 +68,8 @@ export const handler = async () => {
         .from("verified_leads")
         .update({ uploaded: true })
         .in("id", ids)
+
+      console.log("✅ Batch uploaded and marked as uploaded.")
     }
 
     return {
@@ -66,7 +78,7 @@ export const handler = async () => {
     }
 
   } catch (err: any) {
-    console.error("❌ Cron upload error:", err)
+    console.error("❌ Fatal cron error:", err)
     return {
       statusCode: 500,
       body: `Error: ${err.message || "Unknown error"}`,
