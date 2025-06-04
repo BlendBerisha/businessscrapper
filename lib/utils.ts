@@ -266,11 +266,9 @@ export async function convertAndVerifyJson(
 ) {
   if (typeof window === "undefined") return []
 
-  // 1) Split into “With Emails” vs “No Emails”
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
   const workbook = XLSX.utils.book_new()
 
-  // 2) Build a list of just the primary “row.email” values
   const emailList: { email: string; idx: number }[] = []
   withEmails.forEach((row, idx) => {
     const e = (row.email as string)?.trim() ?? ""
@@ -279,63 +277,65 @@ export async function convertAndVerifyJson(
     }
   })
 
-  // 3) Run the client‐side /api/verify-email loop on each primary email with delay
+  const batchSize = 25
   const verifiedResults: { email: string; is_email_valid: boolean }[] = []
-  for (const { email } of emailList) {
-    try {
-      const res = await fetch("/api/verify-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, apiKey }),
-      })
-      const result = await res.json()
-      const isValid =
-        ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-        result.quality?.toLowerCase?.() !== "risky"
 
-      verifiedResults.push({ email, is_email_valid: isValid })
-    } catch (err) {
-      console.error("❌ Error verifying:", email, err)
-      verifiedResults.push({ email, is_email_valid: false })
+  for (let i = 0; i < emailList.length; i += batchSize) {
+    const batch = emailList.slice(i, i + batchSize)
+
+    for (const { email } of batch) {
+      try {
+        const res = await fetch("/api/verify-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, apiKey }),
+        })
+        const result = await res.json()
+        const isValid =
+          ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+          result.quality?.toLowerCase?.() !== "risky"
+
+        verifiedResults.push({ email, is_email_valid: isValid })
+      } catch (err) {
+        console.error("❌ Error verifying:", email, err)
+        verifiedResults.push({ email, is_email_valid: false })
+      }
+
+      // Throttle per email to avoid rate limiting
+      await new Promise((res) => setTimeout(res, 300))
     }
-
-    // ⏱️ Add delay to prevent rate limits (adjust as needed)
-    await new Promise((res) => setTimeout(res, 300))
   }
 
-  // 4) Create a lookup so we know which primary emails passed
+  // Create validation lookup map
   const validationMap = Object.fromEntries(
     verifiedResults.map(({ email, is_email_valid }) => [email.toLowerCase(), is_email_valid])
   )
 
-  // 5) Overwrite each row’s is_email_valid in withEmails based on that lookup
   const updatedWithEmails = withEmails.map((row) => {
     const lower = (row.email as string)?.toLowerCase?.() ?? ""
-    if (lower && validationMap[lower] !== undefined) {
-      return { ...row, is_email_valid: validationMap[lower] }
+    return {
+      ...row,
+      is_email_valid: validationMap[lower] ?? false,
     }
-    return { ...row, is_email_valid: false }
   })
 
-  // 6) Append the “With Emails” sheet
+  // Build XLSX
   if (updatedWithEmails.length > 0) {
     const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
   }
 
-  // 7) Append the “No Emails” sheet
   if (withoutEmails.length > 0) {
     const sheetNo = XLSX.utils.json_to_sheet(withoutEmails)
     XLSX.utils.book_append_sheet(workbook, sheetNo, "No Emails")
   }
 
-  // 8) If no rows at all, write “No Data”
   if (updatedWithEmails.length === 0 && withoutEmails.length === 0) {
     const sheetEmpty = XLSX.utils.aoa_to_sheet([["No data available"]])
     XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
   }
 
-  // 9) Trigger .xlsx download
+  // Download XLSX
   const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
   const xlsxBlob = new Blob([xlsxBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -349,7 +349,7 @@ export async function convertAndVerifyJson(
   document.body.removeChild(a1)
   URL.revokeObjectURL(xlsxUrl)
 
-  // 10) Trigger JSON download (only the “With Emails” array)
+  // Download JSON
   const jsonBlob = new Blob([JSON.stringify(updatedWithEmails, null, 2)], {
     type: "application/json",
   })
@@ -362,6 +362,5 @@ export async function convertAndVerifyJson(
   document.body.removeChild(a2)
   URL.revokeObjectURL(jsonUrl)
 
-  // 11) Return the updated array so your React code can use it
   return updatedWithEmails
 }
