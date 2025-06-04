@@ -1,4 +1,4 @@
-import { InstantlyAPI } from "@/lib/instantly" // no need to change if this already works
+import { InstantlyAPI } from "@/lib/instantly"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
@@ -8,32 +8,57 @@ const supabase = createClient(
 
 export const handler = async () => {
   try {
-    const { data: leads, error } = await supabase
+    // 1. Fetch Instantly config from Supabase settings table
+    const { data: settingsRow, error: settingsError } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "scrapperSettings")
+      .maybeSingle()
+
+    if (settingsError || !settingsRow) {
+      throw new Error("❌ Missing Instantly configuration in Supabase.")
+    }
+
+    const config = settingsRow.value || {}
+
+    if (!config.instantlyApiKey || !config.instantlyListId || !config.instantlyCampaignId) {
+      throw new Error("❌ Instantly credentials are incomplete.")
+    }
+
+    // 2. Fetch valid, not-yet-uploaded leads
+    const { data: leads, error: leadsError } = await supabase
       .from("verified_leads")
       .select("*")
       .eq("is_email_valid", true)
       .eq("uploaded", false)
 
-    if (error) throw error
-    if (!leads || leads.length === 0) return {
-      statusCode: 200,
-      body: "No new leads to upload."
+    if (leadsError) throw leadsError
+
+    if (!leads || leads.length === 0) {
+      return {
+        statusCode: 200,
+        body: "No new leads to upload.",
+      }
     }
 
+    // 3. Chunk leads into batches
     const batchSize = 50
     const batches = Array.from({ length: Math.ceil(leads.length / batchSize) }, (_, i) =>
       leads.slice(i * batchSize, i * batchSize + batchSize)
     )
 
+    // 4. Initialize InstantlyAPI with config from Supabase
     const instantly = new InstantlyAPI({
-      apiKey: process.env.INSTANTLY_API_KEY!,
-      listId: process.env.INSTANTLY_LIST_ID!,
-      campaignId: process.env.INSTANTLY_CAMPAIGN_ID!,
+      apiKey: config.instantlyApiKey,
+      listId: config.instantlyListId,
+      campaignId: config.instantlyCampaignId,
     })
 
+    // 5. Upload each batch and mark as uploaded
     for (const batch of batches) {
       await instantly.addLeadsFromData(batch)
-      const ids = batch.map(lead => lead.id)
+
+      const ids = batch.map((lead: any) => lead.id)
       await supabase
         .from("verified_leads")
         .update({ uploaded: true })
@@ -47,6 +72,9 @@ export const handler = async () => {
 
   } catch (err: any) {
     console.error("❌ Cron upload error:", err)
-    return { statusCode: 500, body: `Error: ${err.message}` }
+    return {
+      statusCode: 500,
+      body: `Error: ${err.message || "Unknown error"}`,
+    }
   }
 }
