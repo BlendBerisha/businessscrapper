@@ -290,22 +290,29 @@ export async function convertAndVerifyJson(
         body: JSON.stringify({ emails: batch, apiKey }),
       })
 
+      if (!res.ok) {
+        throw new Error(`Batch failed with status ${res.status}`)
+      }
+
       const result: { email: string; is_email_valid: boolean }[] = await res.json()
 
-      // Sanity check: ensure result is array
       if (Array.isArray(result)) {
         verifiedResults.push(...result)
       } else {
-        console.error("❌ Unexpected response format:", result)
-        batch.forEach(email => verifiedResults.push({ email, is_email_valid: false }))
+        console.warn("❌ Unexpected batch result format", result)
+        batch.forEach(email =>
+          verifiedResults.push({ email, is_email_valid: false })
+        )
       }
     } catch (err) {
-      console.error("❌ Failed to verify batch:", batch, err)
-      batch.forEach(email => verifiedResults.push({ email, is_email_valid: false }))
+      console.error("❌ Error verifying batch:", batch, err)
+      batch.forEach(email =>
+        verifiedResults.push({ email, is_email_valid: false })
+      )
     }
 
-    // Optional delay between batches (you can reduce to 500ms if stable)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Delay between batches (reduced to 500ms)
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 
   const validationMap = Object.fromEntries(
