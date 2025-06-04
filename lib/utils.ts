@@ -272,8 +272,10 @@ export async function convertAndVerifyJson(
   const batchSize = 25
   const verifiedResults: { email: string; is_email_valid: boolean }[] = []
 
-  // Split by row batch, not just by emails
-  for (let i = 0; i < withEmails.length; i += batchSize) {
+  let i = 0
+  const startTime = Date.now()
+
+  while (i < withEmails.length) {
     const rowBatch = withEmails.slice(i, i + batchSize)
     const emailsToVerify = rowBatch
       .map(row => (row.email as string)?.trim())
@@ -301,6 +303,14 @@ export async function convertAndVerifyJson(
       emailsToVerify.forEach(email =>
         verifiedResults.push({ email, is_email_valid: false })
       )
+    }
+
+    i += batchSize
+
+    // Stop loop if time limit exceeded (~9.5s)
+    if (Date.now() - startTime > 9500) {
+      console.warn("⏳ Execution nearing timeout in browser, stopping verification loop early.")
+      break
     }
 
     await new Promise(resolve => setTimeout(resolve, 500))
