@@ -312,7 +312,7 @@ export async function convertAndVerifyJson(
     }
 
     // Delay between batches (reduced to 500ms)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise(resolve => setTimeout(resolve, 3000))
   }
 
   const validationMap = Object.fromEntries(
