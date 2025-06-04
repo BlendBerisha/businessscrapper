@@ -4,17 +4,19 @@ export interface InstantlyCredentials {
     campaignId: string
   }
   
-  export interface LeadData {
-    email: string
-    company_name?: string
-    phone?: string
-    website?: string
-    personalization?: string
-    first_name?: string
-    last_name?: string
-    extra_fields?: Record<string, any>
-    custom_variables?: Record<string, any>
-  }
+export interface LeadData {
+  email: string
+  company_name?: string
+  phone?: string
+  website?: string
+  personalization?: string
+  first_name?: string
+  last_name?: string
+  display_name?: string // ✅ Add this line
+  site?: string          // ✅ Add this too if used in mapping
+  extra_fields?: Record<string, any>
+  custom_variables?: Record<string, any>
+}
   
   export class InstantlyAPI {
     private apiKey: string
@@ -130,68 +132,45 @@ private isValidEmail(email: any): boolean {
   
 async addLeadsFromData(data: LeadData[]): Promise<{ success: string[]; failed: string[] }> {
   const validLeads = data.filter((item) => this.isValidEmail(item.email))
+  const successful: string[] = []
+  const failed: string[] = []
 
-  if (validLeads.length === 0) {
-    console.warn("❌ No valid emails found to upload")
-    return { success: [], failed: [] }
+  console.log(`📥 Starting upload of ${validLeads.length} leads to Instantly`)
+
+  // Run 3 uploads in parallel to avoid rate limits
+  const concurrency = 3
+  const chunks = Array.from({ length: Math.ceil(validLeads.length / concurrency) }, (_, i) =>
+    validLeads.slice(i * concurrency, i * concurrency + concurrency)
+  )
+
+  for (const chunk of chunks) {
+    const results = await Promise.allSettled(
+      chunk.map((lead) =>
+        this.addLead({
+          email: lead.email,
+          company_name: lead.company_name || lead.display_name || "N/A",
+          phone: lead.phone || "N/A",
+          website: lead.website || lead.site || "N/A",
+          personalization: lead.personalization || `Hello ${lead.first_name || "there"}, I wanted to connect.`,
+          first_name: lead.first_name || "Unknown",
+          last_name: lead.last_name || "Unknown",
+          extra_fields: lead,
+          custom_variables: { ...lead },
+        })
+      )
+    )
+
+    results.forEach((res, i) => {
+      const email = chunk[i].email
+      if (res.status === "fulfilled" && res.value) successful.push(email)
+      else failed.push(email)
+    })
   }
 
-  const payload = validLeads.map((item) => {
-    const cleanedExtra = this.cleanData({
-      display_name: item.company_name,
-      first_name: item.first_name,
-      last_name: item.last_name,
-      ...item.extra_fields,
-    })
-
-    const cleanedCustom = this.cleanData({
-      display_name: item.company_name,
-      first_name: item.first_name,
-      last_name: item.last_name,
-      ...item.custom_variables,
-    })
-
-    return {
-      list_id: this.listId,
-      campaign: this.campaignId,
-      email: item.email,
-      company_name: item.company_name,
-      phone: item.phone,
-      website: item.website,
-      personalization: item.personalization || "Hello there, I wanted to connect.",
-      first_name: item.first_name,
-      last_name: item.last_name,
-      extra_fields: cleanedExtra,
-      custom_variables: cleanedCustom,
-    }
-  })
-
-  try {
-    const res = await fetch(`${this.baseUrl}/bulk`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify({ leads: payload }),
-    })
-
-    const responseBody = await res.text()
-    console.log("📨 Instantly bulk response:", res.status, responseBody)
-
-    if (!res.ok) {
-      throw new Error(`❌ Bulk upload failed: ${res.status} - ${responseBody}`)
-    }
-
-    return {
-      success: validLeads.map((l) => l.email),
-      failed: [],
-    }
-  } catch (error) {
-    console.error("❌ Error in bulk upload:", error)
-    return {
-      success: [],
-      failed: validLeads.map((l) => l.email),
-    }
-  }
+  console.log(`✅ Uploaded: ${successful.length} | ❌ Failed: ${failed.length}`)
+  return { success: successful, failed }
 }
+
   }
   
   
