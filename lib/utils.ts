@@ -269,19 +269,19 @@ export async function convertAndVerifyJson(
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
   const workbook = XLSX.utils.book_new()
 
-  const emailList: { email: string; idx: number }[] = []
+  const emailsToVerify: { email: string; originalIndex: number }[] = []
   withEmails.forEach((row, idx) => {
-    const e = (row.email as string)?.trim() ?? ""
-    if (e.includes("@")) {
-      emailList.push({ email: e, idx })
+    const email = (row.email as string)?.trim() ?? ""
+    if (email.includes("@")) {
+      emailsToVerify.push({ email, originalIndex: idx })
     }
   })
 
-  const batchSize = 25
   const verifiedResults: { email: string; is_email_valid: boolean }[] = []
+  const batchSize = 25
 
-  for (let i = 0; i < emailList.length; i += batchSize) {
-    const batch = emailList.slice(i, i + batchSize).map((e) => e.email)
+  for (let i = 0; i < emailsToVerify.length; i += batchSize) {
+    const batch = emailsToVerify.slice(i, i + batchSize).map(e => e.email)
 
     try {
       const res = await fetch("/api/verify-email", {
@@ -291,17 +291,16 @@ export async function convertAndVerifyJson(
       })
 
       const result: { email: string; is_email_valid: boolean }[] = await res.json()
-
       verifiedResults.push(...result)
     } catch (err) {
-      console.error("❌ Batch verification failed:", batch, err)
-      batch.forEach((email) =>
+      console.error("❌ Failed to verify batch:", batch, err)
+      batch.forEach(email => {
         verifiedResults.push({ email, is_email_valid: false })
-      )
+      })
     }
 
-    // Optional delay between batches
-    await new Promise((res) => setTimeout(res, 500))
+    // Wait 1s between batches to avoid API limits
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 
   const validationMap = Object.fromEntries(
@@ -316,7 +315,7 @@ export async function convertAndVerifyJson(
     }
   })
 
-  // Sheets
+  // Create XLSX sheets
   if (updatedWithEmails.length > 0) {
     const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
