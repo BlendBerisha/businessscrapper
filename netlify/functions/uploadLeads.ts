@@ -12,7 +12,7 @@ export const handler = async () => {
     const { data: settingsRow, error: settingsError } = await supabase
       .from("settings")
       .select("value")
-      .eq("key", "scrapperSettings")
+      .eq("key", "scraperSettings")
       .maybeSingle()
 
     if (settingsError || !settingsRow) {
