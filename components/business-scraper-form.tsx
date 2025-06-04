@@ -239,6 +239,28 @@ const handleSubmit = async (e: React.FormEvent) => {
     })
 
     setBusinessData(filteredData)
+try {
+  const { error } = await supabase.from("saved_json").insert([
+    {
+      json_data: filteredData,
+      verified: false,
+      created_at: new Date().toISOString(),
+    },
+  ])
+
+  if (error) {
+    console.error("❌ Failed to insert into saved_json:", error.message)
+    toast({
+      title: "Insert failed",
+      description: "Could not save data for cron job verification.",
+      variant: "destructive",
+    })
+  } else {
+    console.log("✅ Scraped data saved to Supabase for verification.")
+  }
+} catch (err) {
+  console.error("❌ Unexpected insert error:", err)
+}
 
     toast({
       title: "JSON file saved",
