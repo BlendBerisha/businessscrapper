@@ -320,13 +320,19 @@ export async function convertAndVerifyJson(
     verifiedResults.map(({ email, is_email_valid }) => [email.toLowerCase(), is_email_valid])
   )
 
-  const updatedWithEmails = withEmails.map((row) => {
-    const email = (row.email as string)?.toLowerCase?.() ?? ""
-    return {
-      ...row,
-      is_email_valid: validationMap[email] ?? false,
-    }
-  })
+const updatedWithEmails = withEmails.map((row) => {
+  const email = (row.email as string)?.toLowerCase?.() ?? ""
+  return {
+    ...row,
+    is_email_valid: validationMap[email] ?? false,
+  }
+})
+
+// ✅ Save to Supabase for server-side full verification later
+await supabase.from("saved_json").insert({
+  json_data: updatedWithEmails,
+  verified: false
+})
 
   // XLSX generation
   if (updatedWithEmails.length > 0) {
