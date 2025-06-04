@@ -7,3 +7,6 @@
 
 [functions]
   directory = "netlify/functions"
+
+[functions."uploadLeads"]
+  schedule = "*/10 * * * *" # every 10 minutes
