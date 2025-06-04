@@ -8,7 +8,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing API key" }, { status: 400 })
     }
 
-    // Handle single email
+    // Single email fallback
     if (email) {
       const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}&timeout=10`
       const res = await fetch(url)
@@ -23,30 +23,36 @@ export async function POST(req: Request) {
         free: result.free,
         role: result.role,
         error: result.error,
-        status: "ok",
+        is_email_valid:
+          ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+          result.quality?.toLowerCase?.() !== "risky",
       })
     }
 
-    // Handle batch emails (limit 25 per request)
+    // Batch email verification (max 25)
     if (Array.isArray(emails)) {
-      const results: any[] = []
+      const batch = emails.slice(0, 25)
 
-      for (const email of emails.slice(0, 25)) {
-        try {
-          const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}&timeout=10`
-          const res = await fetch(url)
-          const result = await res.json()
+      const results = await Promise.all(
+        batch.map(async (email: string) => {
+          try {
+            const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}&timeout=10`
+            const res = await fetch(url)
+            const result = await res.json()
 
-          results.push({
-            email,
-            is_email_valid:
-              ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-              result.quality?.toLowerCase?.() !== "risky",
-          })
-        } catch {
-          results.push({ email, is_email_valid: false })
-        }
-      }
+            return {
+              email,
+              is_email_valid:
+                ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+                result.quality?.toLowerCase?.() !== "risky",
+              result: result.result,
+              quality: result.quality,
+            }
+          } catch (err) {
+            return { email, is_email_valid: false, error: true }
+          }
+        })
+      )
 
       return NextResponse.json(results)
     }
