@@ -1,4 +1,4 @@
-import { InstantlyAPI } from "../../lib/instantly" // ✅ Works like your other cron jobs
+import { InstantlyAPI } from "../../lib/instantly"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
@@ -8,6 +8,8 @@ const supabase = createClient(
 
 export const handler = async () => {
   try {
+    console.log("🚀 Cron job started")
+
     console.log("🔍 Fetching scraperSettings...")
     const { data: settingsRow, error: settingsError } = await supabase
       .from("settings")
@@ -36,11 +38,21 @@ export const handler = async () => {
 
     if (leadsError) throw leadsError
 
-    if (!leads || leads.length === 0) {
-      console.log("ℹ️ No leads to upload.")
+    console.log("🐞 Raw leads result:", leads)
+
+    if (!leads) {
+      console.log("❌ leads is undefined")
       return {
         statusCode: 200,
-        body: "No new leads to upload.",
+        body: "No new leads (undefined)."
+      }
+    }
+
+    if (leads.length === 0) {
+      console.log("ℹ️ leads array is empty")
+      return {
+        statusCode: 200,
+        body: "No new leads (0 length)."
       }
     }
 
@@ -61,7 +73,12 @@ export const handler = async () => {
 
     for (const batch of batches) {
       console.log(`📤 Uploading batch with ${batch.length} leads...`)
-      await instantly.addLeadsFromData(batch)
+      try {
+        await instantly.addLeadsFromData(batch)
+      } catch (uploadError) {
+        console.error("❌ Failed to upload to Instantly:", uploadError)
+        throw uploadError
+      }
 
       const ids = batch.map((lead: any) => lead.id)
       await supabase
