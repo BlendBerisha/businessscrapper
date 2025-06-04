@@ -289,9 +289,9 @@ export async function convertAndVerifyJson(
         body: JSON.stringify({ email, apiKey }),
       })
       const result = await res.json()
-const isValid =
-  ["ok", "valid", "catch_all", "risky"].includes(result.result?.toLowerCase?.())
-
+      const isValid =
+        ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+        result.quality?.toLowerCase?.() !== "risky"
 
       verifiedResults.push({ email, is_email_valid: isValid })
     } catch (err) {

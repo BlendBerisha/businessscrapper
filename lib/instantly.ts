@@ -128,42 +128,70 @@ private isValidEmail(email: any): boolean {
       return true
     }
   
-    async addLeadsFromData(data: any[]): Promise<{ success: string[]; failed: string[] }> {
-      const successful: string[] = []
-      const failed: string[] = []
-  
-      console.log(`📥 Starting upload of ${data.length} leads to Instantly`)
-  
-      for (const item of data) {
-        const email = item.email
-        console.log("📧 Processing email:", email)
-        
-        if (!this.isValidEmail(email)) {
-          console.warn("❌ Invalid or missing email:", email)
-          continue
-        }
-          
-        const success = await this.addLead({
-          email,
-          company_name: item.display_name || "N/A",
-          phone: item.phone || "N/A",
-          website: item.site || "N/A",
-          personalization: `Hello ${item.email_first_name || "there"}, I wanted to connect.`,
-          first_name: item.email_first_name || "Unknown",
-          last_name: item.email_last_name || "Unknown",
-          extra_fields: item,
-          custom_variables: { ...item },
-        })
-  
-        if (success) successful.push(email)
-        else failed.push(email)
-      }
-  
-      console.log(`✅ Successfully uploaded: ${successful.length}`)
-      console.log(`❌ Failed uploads: ${failed.length}`)
-  
-      return { success: successful, failed }
+async addLeadsFromData(data: LeadData[]): Promise<{ success: string[]; failed: string[] }> {
+  const validLeads = data.filter((item) => this.isValidEmail(item.email))
+
+  if (validLeads.length === 0) {
+    console.warn("❌ No valid emails found to upload")
+    return { success: [], failed: [] }
+  }
+
+  const payload = validLeads.map((item) => {
+    const cleanedExtra = this.cleanData({
+      display_name: item.company_name,
+      first_name: item.first_name,
+      last_name: item.last_name,
+      ...item.extra_fields,
+    })
+
+    const cleanedCustom = this.cleanData({
+      display_name: item.company_name,
+      first_name: item.first_name,
+      last_name: item.last_name,
+      ...item.custom_variables,
+    })
+
+    return {
+      list_id: this.listId,
+      campaign: this.campaignId,
+      email: item.email,
+      company_name: item.company_name,
+      phone: item.phone,
+      website: item.website,
+      personalization: item.personalization || "Hello there, I wanted to connect.",
+      first_name: item.first_name,
+      last_name: item.last_name,
+      extra_fields: cleanedExtra,
+      custom_variables: cleanedCustom,
     }
+  })
+
+  try {
+    const res = await fetch(`${this.baseUrl}/bulk`, {
+      method: "POST",
+      headers: this.headers,
+      body: JSON.stringify({ leads: payload }),
+    })
+
+    const responseBody = await res.text()
+    console.log("📨 Instantly bulk response:", res.status, responseBody)
+
+    if (!res.ok) {
+      throw new Error(`❌ Bulk upload failed: ${res.status} - ${responseBody}`)
+    }
+
+    return {
+      success: validLeads.map((l) => l.email),
+      failed: [],
+    }
+  } catch (error) {
+    console.error("❌ Error in bulk upload:", error)
+    return {
+      success: [],
+      failed: validLeads.map((l) => l.email),
+    }
+  }
+}
   }
   
   

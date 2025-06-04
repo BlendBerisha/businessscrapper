@@ -392,50 +392,58 @@ if (
   formData.instantlyApiKey &&
   formData.instantlyCampaignId
 ) {
-  // … toast …
   try {
-    const onlyValidRows = verifiedData.filter(
-      (item) => item.is_email_valid === true
-    )
-    const instantlyReadyData = onlyValidRows.map((item) => {
-      const email = item.email?.trim() ?? ""
-      return {
-        email,
-        first_name: item.email_first_name || email.split("@")[0] || "Unknown",
-        last_name: item.email_last_name || "",
-        custom_variables: {
-          company: item.company_name || item.display_name || "",
-          phone: item.phone || "",
-          city: item.city || "",
-          country: item.country || "",
-          website: item.site || "",
-        },
-      }
-    }).filter((item) => item.email && item.email.includes("@"))
-    await uploadToInstantly(instantlyReadyData, {
+    const validLeads = verifiedData
+      .filter((item) => item.is_email_valid === true && item.email && item.email.includes("@"))
+      .map((item) => {
+        const email = item.email.trim()
+        return {
+          email,
+          first_name: item.email_first_name || email.split("@")[0] || "Unknown",
+          last_name: item.email_last_name || "",
+          custom_variables: {
+            company: item.company_name || item.display_name || "",
+            phone: item.phone || "",
+            city: item.city || "",
+            country: item.country || "",
+            website: item.site || "",
+          },
+        }
+      })
+
+    if (validLeads.length === 0) {
+      toast({
+        title: "No valid emails",
+        description: "No verified emails available to upload to Instantly.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Send all valid leads at once
+    await uploadToInstantly(validLeads, {
       apiKey: formData.instantlyApiKey,
       listId: formData.instantlyListId,
       campaignId: formData.instantlyCampaignId,
     })
 
     toast({
-      title: "Data uploaded to Instantly",
-      description: "Business data has been uploaded to Instantly campaign.",
+      title: "✅ Uploaded to Instantly",
+      description: `${validLeads.length} verified leads uploaded.`,
       variant: "success",
     })
   } catch (error) {
-    console.error("Error uploading to Instantly:", error)
+    console.error("❌ Instantly upload error:", error)
     toast({
-      title: "Instantly upload error",
-      description: "Failed to upload data to Instantly. Check your credentials.",
+      title: "Instantly upload failed",
+      description: "An error occurred while uploading leads. Check the console for details.",
       variant: "destructive",
     })
   }
 } else if (formData.addtocampaign && formData.connectColdEmail) {
   toast({
-    title: "Instantly upload skipped",
-    description:
-      "Instantly API credentials are not fully configured. Please add them in Settings.",
+    title: "Instantly credentials missing",
+    description: "Please provide Instantly API key, List ID, and Campaign ID in Settings.",
     variant: "destructive",
   })
 }
