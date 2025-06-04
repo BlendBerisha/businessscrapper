@@ -8,7 +8,6 @@ const supabase = createClient(
 
 export const handler = async () => {
   try {
-    // 1. Fetch Instantly config from Supabase settings table
     const { data: settingsRow, error: settingsError } = await supabase
       .from("settings")
       .select("value")
@@ -25,7 +24,6 @@ export const handler = async () => {
       throw new Error("❌ Instantly credentials are incomplete.")
     }
 
-    // 2. Fetch valid, not-yet-uploaded leads
     const { data: leads, error: leadsError } = await supabase
       .from("verified_leads")
       .select("*")
@@ -41,20 +39,17 @@ export const handler = async () => {
       }
     }
 
-    // 3. Chunk leads into batches
     const batchSize = 50
     const batches = Array.from({ length: Math.ceil(leads.length / batchSize) }, (_, i) =>
       leads.slice(i * batchSize, i * batchSize + batchSize)
     )
 
-    // 4. Initialize InstantlyAPI with config from Supabase
     const instantly = new InstantlyAPI({
       apiKey: config.instantlyApiKey,
       listId: config.instantlyListId,
       campaignId: config.instantlyCampaignId,
     })
 
-    // 5. Upload each batch and mark as uploaded
     for (const batch of batches) {
       await instantly.addLeadsFromData(batch)
 
