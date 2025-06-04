@@ -269,30 +269,22 @@ export async function convertAndVerifyJson(
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
   const workbook = XLSX.utils.book_new()
 
-  const emailsToVerify: { email: string; originalIndex: number }[] = []
-  withEmails.forEach((row, idx) => {
-    const email = (row.email as string)?.trim() ?? ""
-    if (email.includes("@")) {
-      emailsToVerify.push({ email, originalIndex: idx })
-    }
-  })
-
   const batchSize = 25
   const verifiedResults: { email: string; is_email_valid: boolean }[] = []
 
-  for (let i = 0; i < emailsToVerify.length; i += batchSize) {
-    const batch = emailsToVerify.slice(i, i + batchSize).map(e => e.email)
+  // Split by row batch, not just by emails
+  for (let i = 0; i < withEmails.length; i += batchSize) {
+    const rowBatch = withEmails.slice(i, i + batchSize)
+    const emailsToVerify = rowBatch
+      .map(row => (row.email as string)?.trim())
+      .filter(email => email && email.includes("@"))
 
     try {
       const res = await fetch("/api/verify-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emails: batch, apiKey }),
+        body: JSON.stringify({ emails: emailsToVerify, apiKey }),
       })
-
-      if (!res.ok) {
-        throw new Error(`Batch failed with status ${res.status}`)
-      }
 
       const result: { email: string; is_email_valid: boolean }[] = await res.json()
 
@@ -300,19 +292,18 @@ export async function convertAndVerifyJson(
         verifiedResults.push(...result)
       } else {
         console.warn("❌ Unexpected batch result format", result)
-        batch.forEach(email =>
+        emailsToVerify.forEach(email =>
           verifiedResults.push({ email, is_email_valid: false })
         )
       }
     } catch (err) {
-      console.error("❌ Error verifying batch:", batch, err)
-      batch.forEach(email =>
+      console.error("❌ Error verifying batch:", err)
+      emailsToVerify.forEach(email =>
         verifiedResults.push({ email, is_email_valid: false })
       )
     }
 
-    // Delay between batches (reduced to 500ms)
-    await new Promise(resolve => setTimeout(resolve, 3000))
+    await new Promise(resolve => setTimeout(resolve, 500))
   }
 
   const validationMap = Object.fromEntries(
@@ -320,10 +311,10 @@ export async function convertAndVerifyJson(
   )
 
   const updatedWithEmails = withEmails.map((row) => {
-    const lower = (row.email as string)?.toLowerCase?.() ?? ""
+    const email = (row.email as string)?.toLowerCase?.() ?? ""
     return {
       ...row,
-      is_email_valid: validationMap[lower] ?? false,
+      is_email_valid: validationMap[email] ?? false,
     }
   })
 
