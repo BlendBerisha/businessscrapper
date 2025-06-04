@@ -2,37 +2,30 @@ import { NextResponse } from "next/server"
 
 export async function POST(req: Request) {
   try {
-    const { email, emails, apiKey } = await req.json()
+    const body = await req.json()
+    const { email, emails, apiKey } = body
 
-    if (!apiKey || (!email && (!emails || !Array.isArray(emails)))) {
+    if (!apiKey || (!email && (!Array.isArray(emails) || emails.length === 0))) {
       return NextResponse.json({ error: "Missing email(s) or API key" }, { status: 400 })
     }
 
-    // ✅ Single email mode (fallback)
+    // ✅ Handle single email (legacy/fallback)
     if (email) {
       const url = `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}&timeout=10`
       const res = await fetch(url)
-
-      if (!res.ok) {
-        const text = await res.text()
-        return NextResponse.json({ error: text }, { status: res.status })
-      }
-
       const result = await res.json()
 
       return NextResponse.json({
         email: result.email,
         result: result.result,
         quality: result.quality,
-        resultcode: result.resultcode,
-        subresult: result.subresult,
-        free: result.free,
-        role: result.role,
-        error: result.error,
+        is_email_valid:
+          ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+          result.quality?.toLowerCase?.() !== "risky",
       })
     }
 
-    // ✅ Batch mode (verify multiple emails)
+    // ✅ Handle batch of emails
     const results: { email: string; is_email_valid: boolean }[] = []
 
     for (const e of emails) {
@@ -46,7 +39,7 @@ export async function POST(req: Request) {
           result.quality?.toLowerCase?.() !== "risky"
 
         results.push({ email: e, is_email_valid: isValid })
-      } catch (err) {
+      } catch (error) {
         results.push({ email: e, is_email_valid: false })
       }
     }
