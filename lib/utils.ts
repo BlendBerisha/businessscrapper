@@ -261,8 +261,8 @@ export function getNormalizedColumn(row: Record<string, any>, targetKey: string)
 export async function convertAndVerifyJson(
   jsonData: any[],
   apiKey: string,
-  jsonFileName: string = "business-verified-clean.json",
-  xlsxFileName: string = "business-verified-clean.xlsx"
+  jsonFileName = "business-verified-clean.json",
+  xlsxFileName = "business-verified-clean.xlsx"
 ) {
   if (typeof window === "undefined") return []
 
@@ -277,8 +277,8 @@ export async function convertAndVerifyJson(
     }
   })
 
-  const verifiedResults: { email: string; is_email_valid: boolean }[] = []
   const batchSize = 25
+  const verifiedResults: { email: string; is_email_valid: boolean }[] = []
 
   for (let i = 0; i < emailsToVerify.length; i += batchSize) {
     const batch = emailsToVerify.slice(i, i + batchSize).map(e => e.email)
@@ -291,16 +291,21 @@ export async function convertAndVerifyJson(
       })
 
       const result: { email: string; is_email_valid: boolean }[] = await res.json()
-      verifiedResults.push(...result)
+
+      // Sanity check: ensure result is array
+      if (Array.isArray(result)) {
+        verifiedResults.push(...result)
+      } else {
+        console.error("❌ Unexpected response format:", result)
+        batch.forEach(email => verifiedResults.push({ email, is_email_valid: false }))
+      }
     } catch (err) {
       console.error("❌ Failed to verify batch:", batch, err)
-      batch.forEach(email => {
-        verifiedResults.push({ email, is_email_valid: false })
-      })
+      batch.forEach(email => verifiedResults.push({ email, is_email_valid: false }))
     }
 
-    // Wait 1s between batches to avoid API limits
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Optional delay between batches (you can reduce to 500ms if stable)
+    await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
   const validationMap = Object.fromEntries(
@@ -315,7 +320,7 @@ export async function convertAndVerifyJson(
     }
   })
 
-  // Create XLSX sheets
+  // XLSX generation
   if (updatedWithEmails.length > 0) {
     const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
