@@ -2,7 +2,6 @@ import { Handler } from "@netlify/functions"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
 import { supabase } from "../../lib/supabase"
-import { verifyEmails } from "@/actions/million-verifier"
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,6 +53,55 @@ async function fetchBusinessData(params: any) {
 
   const json = await res.json()
   return json.data
+}
+
+async function verifyEmailsTimedLoop(
+  emails: { id: string; email: string }[],
+  apiKey: string
+): Promise<Record<string, boolean>> {
+  let index = 0
+  const resultMap: Record<string, boolean> = {}
+
+  return new Promise((resolve) => {
+    const loop = async () => {
+      const start = Date.now()
+
+      while (index < emails.length) {
+        const { id, email } = emails[index]
+
+        try {
+          const res = await fetch("https://api.millionverifier.com/api/v3/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api: apiKey, email }),
+          })
+          const result = await res.json()
+
+          const isValid =
+            ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+            result.quality?.toLowerCase?.() !== "risky"
+
+          resultMap[id] = isValid
+          console.log(`✅ ${email} → ${result.result}/${result.quality} → valid: ${isValid}`)
+        } catch (err) {
+          console.error(`❌ Failed verifying ${email}:`, err)
+          resultMap[id] = false
+        }
+
+        index++
+
+        if (Date.now() - start >= 9500) {
+          console.log("⏳ Breaking loop to avoid timeout...")
+          setTimeout(loop, 100)
+          return
+        }
+      }
+
+      resolve(resultMap)
+    }
+
+    loop()
+  })
 }
 
 const handler: Handler = async () => {
@@ -120,43 +168,26 @@ const handler: Handler = async () => {
       return { statusCode: 200, body: "No data found." }
     }
 
-    // ✅ VERIFY EMAILS
-    const verifiedData: any[] = []
-
-    for (const item of businessData) {
-      const emailRaw = item.email || item.email_1 || item.email_2 || item.email_3
-      const email = typeof emailRaw === "string" && emailRaw.includes("@") ? emailRaw.trim() : null
-    
-      let isValid = false
-      if (email) {
-        try {
-          const response = await fetch("https://api.millionverifier.com/api/v3/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              api: mvKey,
-              email,
-            }),
-          })
-          const result = await response.json()
-    
-          isValid =
-            ["ok", "valid"].includes(result.result?.toLowerCase?.()) &&
-            result.quality?.toLowerCase?.() !== "risky"
-    
-          console.log(`📧 ${email} → ${result.result}/${result.quality} → valid:`, isValid)
-        } catch (err) {
-          console.error("❌ Email verification failed for", email, err)
-        }
-      }
-    
-      verifiedData.push({
-        ...item,
-        email: email || "",
-        is_email_valid: isValid,
+    // ✅ VERIFY EMAILS using timed loop
+    const emailsToCheck = businessData
+      .map((item: any, idx: number) => {
+        const rawEmail = item.email || item.email_1 || item.email_2 || item.email_3
+        const email = typeof rawEmail === "string" && rawEmail.includes("@") ? rawEmail.trim() : null
+        return email ? { id: String(idx), email } : null
       })
-    }
-    
+      .filter(Boolean) as { id: string; email: string }[]
+
+    const validationResults = await verifyEmailsTimedLoop(emailsToCheck, mvKey)
+
+    const verifiedData = businessData.map((item: any, idx: number) => {
+      const id = String(idx)
+      return {
+        ...item,
+        email: emailsToCheck.find((e) => e.id === id)?.email || "",
+        is_email_valid: validationResults[id] ?? false,
+      }
+    })
+
     // ✅ EXPORT TO XLSX
     const sheet = XLSX.utils.json_to_sheet(verifiedData)
     const book = XLSX.utils.book_new()

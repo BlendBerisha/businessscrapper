@@ -256,57 +256,6 @@ export function getNormalizedColumn(row: Record<string, any>, targetKey: string)
   const matchKey = Object.keys(row).find(k => k.trim().toLowerCase() === targetKey.trim().toLowerCase())
   return matchKey ? row[matchKey] : ""
 }
-export async function verifyEmailsTimedLoop(
-  emails: string[],
-  apiKey: string,
-  progressCallback?: (progress: number) => void
-): Promise<{ email: string; is_email_valid: boolean }[]> {
-  const verified: { email: string; is_email_valid: boolean }[] = []
-  let index = 0
-
-  return new Promise((resolve) => {
-    const processChunk = async () => {
-      const start = performance.now()
-
-      while (index < emails.length) {
-        const email = emails[index]
-
-        try {
-          const res = await fetch("/api/verify-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, apiKey }),
-          })
-
-          const result = await res.json()
-
-          const isValid =
-            ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
-            result.quality?.toLowerCase?.() !== "risky"
-
-          verified.push({ email, is_email_valid: isValid })
-        } catch (err) {
-          console.error("❌ Failed to verify:", email, err)
-          verified.push({ email, is_email_valid: false })
-        }
-
-        index++
-        if (progressCallback) {
-          progressCallback(Math.round((index / emails.length) * 100))
-        }
-
-        if (performance.now() - start > 9500) {
-          setTimeout(processChunk, 50)
-          return
-        }
-      }
-
-      resolve(verified)
-    }
-
-    processChunk()
-  })
-}
 
 
 export async function convertAndVerifyJson(
@@ -320,26 +269,56 @@ export async function convertAndVerifyJson(
   const { withEmails, withoutEmails } = separateEmailData(jsonData)
   const workbook = XLSX.utils.book_new()
 
-  const emailsToVerify = withEmails
-    .map((row) => row.email?.trim())
-    .filter((email) => email && email.includes("@"))
+  const batchSize = 25
+  const verifiedResults: { email: string; is_email_valid: boolean }[] = []
 
-  const verifiedResults = await verifyEmailsTimedLoop(emailsToVerify, apiKey, (progress) => {
-    console.log(`⏳ Progress: ${progress}%`)
-  })
+  // Split by row batch, not just by emails
+  for (let i = 0; i < withEmails.length; i += batchSize) {
+    const rowBatch = withEmails.slice(i, i + batchSize)
+    const emailsToVerify = rowBatch
+      .map(row => (row.email as string)?.trim())
+      .filter(email => email && email.includes("@"))
+
+    try {
+      const res = await fetch("/api/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: emailsToVerify, apiKey }),
+      })
+
+      const result: { email: string; is_email_valid: boolean }[] = await res.json()
+
+      if (Array.isArray(result)) {
+        verifiedResults.push(...result)
+      } else {
+        console.warn("❌ Unexpected batch result format", result)
+        emailsToVerify.forEach(email =>
+          verifiedResults.push({ email, is_email_valid: false })
+        )
+      }
+    } catch (err) {
+      console.error("❌ Error verifying batch:", err)
+      emailsToVerify.forEach(email =>
+        verifiedResults.push({ email, is_email_valid: false })
+      )
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
 
   const validationMap = Object.fromEntries(
     verifiedResults.map(({ email, is_email_valid }) => [email.toLowerCase(), is_email_valid])
   )
 
   const updatedWithEmails = withEmails.map((row) => {
-    const email = row.email?.toLowerCase?.() ?? ""
+    const email = (row.email as string)?.toLowerCase?.() ?? ""
     return {
       ...row,
       is_email_valid: validationMap[email] ?? false,
     }
   })
 
+  // XLSX generation
   if (updatedWithEmails.length > 0) {
     const sheetWith = XLSX.utils.json_to_sheet(updatedWithEmails)
     XLSX.utils.book_append_sheet(workbook, sheetWith, "With Emails")
@@ -355,6 +334,7 @@ export async function convertAndVerifyJson(
     XLSX.utils.book_append_sheet(workbook, sheetEmpty, "No Data")
   }
 
+  // XLSX download
   const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" })
   const xlsxBlob = new Blob([xlsxBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -362,19 +342,20 @@ export async function convertAndVerifyJson(
   const xlsxUrl = URL.createObjectURL(xlsxBlob)
   const a1 = document.createElement("a")
   a1.href = xlsxUrl
-  a1.download = xlsxFileName
+  a1.download = xlsxFileName.endsWith(".xlsx") ? xlsxFileName : `${xlsxFileName}.xlsx`
   document.body.appendChild(a1)
   a1.click()
   document.body.removeChild(a1)
   URL.revokeObjectURL(xlsxUrl)
 
+  // JSON download
   const jsonBlob = new Blob([JSON.stringify(updatedWithEmails, null, 2)], {
     type: "application/json",
   })
   const jsonUrl = URL.createObjectURL(jsonBlob)
   const a2 = document.createElement("a")
   a2.href = jsonUrl
-  a2.download = jsonFileName
+  a2.download = jsonFileName.endsWith(".json") ? jsonFileName : `${jsonFileName}.json`
   document.body.appendChild(a2)
   a2.click()
   document.body.removeChild(a2)
