@@ -18,12 +18,20 @@ export const handler = async () => {
       .maybeSingle()
 
     if (settingsError || !settingsRow) {
-      throw new Error("❌ Missing Instantly configuration in Supabase.")
+      throw new Error("❌ Missing scraperSettings in Supabase.")
     }
 
-    console.log("✅ Settings found:", settingsRow)
+    const config = settingsRow.value
 
-    const config = settingsRow.value || {}
+    if (typeof config !== "object" || !config) {
+      throw new Error("❌ Config is not an object or is null.")
+    }
+
+    console.log("🧩 Config values:", {
+      instantlyApiKey: config.instantlyApiKey,
+      instantlyListId: config.instantlyListId,
+      instantlyCampaignId: config.instantlyCampaignId,
+    })
 
     if (!config.instantlyApiKey || !config.instantlyListId || !config.instantlyCampaignId) {
       throw new Error("❌ Instantly credentials are incomplete.")
