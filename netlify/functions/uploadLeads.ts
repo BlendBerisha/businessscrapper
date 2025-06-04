@@ -1,4 +1,4 @@
-import { InstantlyAPI } from "@/lib/instantly"
+import { InstantlyAPI } from "../../lib/instantly" // ✅ Works like your other cron jobs
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
