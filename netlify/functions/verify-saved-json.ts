@@ -61,7 +61,21 @@ async function verifyEmailsTimedLoop(
 }
 
 const handler: Handler = async () => {
-  // Load unverified data from Supabase (or S3, or wherever you saved)
+  const { data: settingsData } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "scraperSettings")
+    .maybeSingle()
+
+  const settings = settingsData?.value || {}
+  const slackToken = settings.slackBotToken
+  const slackChannel = settings.slackChannelId
+  const mvKey = settings.millionApiKey
+
+  if (!slackToken || !slackChannel || !mvKey) {
+    return { statusCode: 400, body: "Missing Slack credentials or MV key in settings." }
+  }
+
   const { data, error } = await supabase
     .from("saved_json")
     .select("*")
@@ -75,7 +89,6 @@ const handler: Handler = async () => {
   const entry = data[0]
   const businessData: any[] = entry.json_data || []
 
-  const mvKey = process.env.MILLION_VERIFIER_API_KEY!
   const emailsToCheck = businessData
     .map((item, idx) => {
       const raw = item.email || item.email_1 || item.email_2 || item.email_3
@@ -95,19 +108,55 @@ const handler: Handler = async () => {
     }
   })
 
-  // Save back to Supabase
+  // Update DB
   const { error: updateError } = await supabase
     .from("saved_json")
-    .update({ json_data: verifiedData, verified: true, verified_at: new Date().toISOString() })
+    .update({
+      json_data: verifiedData,
+      verified: true,
+      verified_at: new Date().toISOString(),
+    })
     .eq("id", entry.id)
 
   if (updateError) {
     return { statusCode: 500, body: `❌ Failed to save verified data: ${updateError.message}` }
   }
 
+  // Export and Upload
+  const sheet = XLSX.utils.json_to_sheet(verifiedData)
+  const book = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(book, sheet, "Verified Leads")
+  const buffer = XLSX.write(book, { bookType: "xlsx", type: "buffer" })
+
+  const filename = `verified_leads_${Date.now()}.xlsx`
+  const { error: uploadError } = await supabase.storage
+    .from("scrapes")
+    .upload(filename, buffer, {
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      upsert: true,
+    })
+
+  if (uploadError) {
+    return { statusCode: 500, body: `❌ Upload failed: ${uploadError.message}` }
+  }
+
+  const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${filename}`
+
+  await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${slackToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      channel: slackChannel,
+      text: `✅ *Verified Leads Ready*\nFile: <${publicUrl}|Download XLSX>`
+    })
+  })
+
   return {
     statusCode: 200,
-    body: `✅ Verified ${emailsToCheck.length} emails and saved.`,
+    body: `✅ Verified ${emailsToCheck.length} emails, saved and posted to Slack.`,
   }
 }
 
