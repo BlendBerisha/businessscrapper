@@ -1,4 +1,3 @@
-// app/api/process-queued-scrapes/route.ts
 import { NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
@@ -9,6 +8,16 @@ const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+const VERIFIED_HEADERS = [
+  "display_name", "types", "type", "country_code", "state", "city", "county", "street", "postal_code", "enrich area codes",
+  "address", "latitude", "longitude", "phone", "phone_type", "linkedin", "facebook", "twitter", "instagram", "tiktok",
+  "whatsapp", "youtube", "site", "site_generator", "photo", "photos_count", "rating", "rating_history", "reviews", "reviews_link",
+  "range", "business_status", "business_status_history", "booking_appointment_link", "menu_link", "verified", "owner_title",
+  "located_in", "os_id", "google_id", "place_id", "cid", "gmb_link", "located_os_id", "working_hours", "area_service", "about",
+  "corp_name", "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
+  "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
+]
 
 async function fetchBusinessData(params: any) {
   const baseQuery = new URLSearchParams({
@@ -127,7 +136,8 @@ export async function GET() {
 
     const emailsToCheck = businessData
       .map((item: any, idx: number) => {
-        const email = item.email || item.email_1 || item.email_2 || item.email_3
+        const rawEmail = item.email || item.email_1 || item.email_2 || item.email_3
+        const email = typeof rawEmail === "string" && rawEmail.includes("@") ? rawEmail.trim() : null
         return email ? { id: String(idx), email } : null
       })
       .filter(Boolean) as { id: string; email: string }[]
@@ -136,14 +146,17 @@ export async function GET() {
 
     const verifiedData = businessData.map((item: any, idx: number) => {
       const id = String(idx)
-      return {
-        ...item,
-        email: emailsToCheck.find((e) => e.id === id)?.email || "",
-        is_email_valid: validationResults[id] ?? false,
-      }
+      const row: Record<string, any> = {}
+      VERIFIED_HEADERS.forEach((header) => {
+        row[header] = item[header] ?? ""
+      })
+      row.email = emailsToCheck.find((e) => e.id === id)?.email || ""
+      row.is_email_valid = validationResults[id] ?? false
+      return row
     })
 
-    const sheet = XLSX.utils.json_to_sheet(verifiedData)
+    const sheet = XLSX.utils.json_to_sheet(verifiedData, { header: VERIFIED_HEADERS })
+    XLSX.utils.sheet_add_aoa(sheet, [VERIFIED_HEADERS], { origin: "A1" })
     const book = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(book, sheet, "Results")
     const buffer = XLSX.write(book, { bookType: "xlsx", type: "buffer" })
@@ -156,10 +169,16 @@ export async function GET() {
         upsert: true,
       })
 
+    if (uploadError) {
+      await supabase.from("scrape_queue").update({ status: "failed", error: uploadError.message }).eq("id", job.id)
+      return NextResponse.json({ error: "Upload to Supabase Storage failed." }, { status: 500 })
+    }
+
     const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${encodeURIComponent(fileName)}`
+    console.log("✅ File uploaded to:", publicUrl)
 
     if (slackToken && slackChannel) {
-      await axios.post(
+      const slackRes = await axios.post(
         "https://slack.com/api/chat.postMessage",
         {
           channel: slackChannel,
@@ -173,6 +192,13 @@ export async function GET() {
           },
         }
       )
+
+    if ((slackRes.data as any).ok !== true) {
+  console.error("❌ Slack error:", slackRes.data)
+}
+else {
+        console.log("✅ Slack message sent for:", job.city)
+      }
     }
 
     await supabase
@@ -182,6 +208,7 @@ export async function GET() {
 
     return NextResponse.json({ message: `✅ Scrape job ${job.id} completed.` })
   } catch (err: any) {
+    console.error("❌ Job failed:", err.message)
     await supabase
       .from("scrape_queue")
       .update({ status: "failed", error: err.message })
