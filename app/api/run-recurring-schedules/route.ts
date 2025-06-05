@@ -192,4 +192,4 @@ export async function GET() {
 
 
 
-//CRON
+//CRONjob
