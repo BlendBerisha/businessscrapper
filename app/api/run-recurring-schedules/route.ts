@@ -1,195 +1,191 @@
+// app/api/process-queued-scrapes/route.ts
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
-import { fetchBusinessData } from "@/actions/targetron"
-import { DateTime } from "luxon"
-import axios from "axios"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
+import { supabase } from "@/lib/supabase"
+import axios from "axios"
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-type MillionVerifierResponse = {
-  status: string
-  result: string
+async function fetchBusinessData(params: any) {
+  const baseQuery = new URLSearchParams({
+    cc: params.country,
+    city: params.city,
+    state: params.state || "",
+    postalCode: params.postalCode || "",
+    type: params.businessType,
+  })
+
+  const estimateUrl = `https://dahab.app.outscraper.com/estimate/places?${baseQuery.toString()}`
+  const estimateRes = await fetch(estimateUrl, {
+    method: "GET",
+    headers: { "X-API-KEY": params.apiKey },
+  })
+
+  const estimateData = await estimateRes.json()
+  const total = estimateData?.total || 0
+  if (!estimateRes.ok || total === 0) {
+    throw new Error(`Estimate failed. Status: ${estimateRes.status}, Total: ${total}`)
+  }
+
+  baseQuery.set("limit", String(params.limit))
+  baseQuery.set("skip", String(((params.skipTimes || 1) - 1) * params.limit))
+
+  const url = `https://dahab.app.outscraper.com/data/places?${baseQuery.toString()}`
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "X-API-KEY": params.apiKey },
+  })
+
+  if (!res.ok) throw new Error(`API request failed with status ${res.status}`)
+
+  const json = await res.json()
+  return json.data
 }
 
-const VERIFIED_HEADERS = [
-  "display_name", "types", "type", "country_code", "state", "city", "county", "street", "postal_code", "enrich area codes",
-  "address", "latitude", "longitude", "phone", "phone_type", "linkedin", "facebook", "twitter", "instagram", "tiktok",
-  "whatsapp", "youtube", "site", "site_generator", "photo", "photos_count", "rating", "rating_history", "reviews", "reviews_link",
-  "range", "business_status", "business_status_history", "booking_appointment_link", "menu_link", "verified", "owner_title",
-  "located_in", "os_id", "google_id", "place_id", "cid", "gmb_link", "located_os_id", "working_hours", "area_service", "about",
-  "corp_name", "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
-  "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
-]
+async function verifyEmailsTimedLoop(
+  emails: { id: string; email: string }[],
+  apiKey: string
+): Promise<Record<string, boolean>> {
+  let index = 0
+  const resultMap: Record<string, boolean> = {}
 
-const verifyEmail = async (email: string, apiKey: string): Promise<boolean> => {
-  try {
-    const { data } = await axios.get<MillionVerifierResponse>(
-      `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}`
-    )
-    return data.status === "ok" && data.result === "valid"
-  } catch (err) {
-    console.error("❌ Email verification error for:", email, err)
-    return false
-  }
-}
+  return new Promise((resolve) => {
+    const loop = async () => {
+      const start = Date.now()
+      while (index < emails.length) {
+        const { id, email } = emails[index]
 
-async function postSlackMessage(text: string, slackBotToken: string, slackChannelId: string) {
-  try {
-    await axios.post("https://slack.com/api/chat.postMessage", {
-      channel: slackChannelId,
-      text,
-      mrkdwn: true,
-    }, {
-      headers: {
-        Authorization: `Bearer ${slackBotToken}`,
-        "Content-Type": "application/json",
-      },
-    })
-  } catch (err) {
-    console.error("❌ Failed to send Slack message:", err)
-  }
+        try {
+          const res = await fetch("https://api.millionverifier.com/api/v3/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api: apiKey, email }),
+          })
+          const result = await res.json()
+          const isValid =
+            ["ok", "valid", "catch_all"].includes(result.result?.toLowerCase?.()) &&
+            result.quality?.toLowerCase?.() !== "risky"
+          resultMap[id] = isValid
+        } catch {
+          resultMap[id] = false
+        }
+
+        index++
+        if (Date.now() - start >= 9500) {
+          setTimeout(loop, 100)
+          return
+        }
+      }
+      resolve(resultMap)
+    }
+    loop()
+  })
 }
 
 export async function GET() {
-  const now = DateTime.now().setZone("Europe/Tirane")
-  const currentDay = now.toFormat("cccc")
-  const currentHour = now.hour
-  const currentMinute = now.minute
-
-  const { data: schedules } = await supabase.from("recurring_scrapes").select("*")
-  const { data: settingsData } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "scraperSettings")
+  const { data: jobs } = await supabase
+    .from("scrape_queue")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
     .limit(1)
 
-  const settings = settingsData?.[0]?.value
-  const slackBotToken = settings?.slackBotToken
-  const slackChannelId = settings?.slackChannelId
-
-  const dueSchedules = schedules?.filter(
-    (s) =>
-      s.recurring_days?.includes(currentDay) &&
-      s.hour === currentHour &&
-      s.minute === currentMinute
-  ) || []
-
-  for (const schedule of dueSchedules) {
-    try {
-      const businessData = await fetchBusinessData({
-        apiKey: settings.targetronApiKey,
-        country: schedule.country,
-        city: schedule.city,
-        state: schedule.state,
-        postalCode: schedule.postal_code,
-        businessType: schedule.business_type,
-        businessStatus: schedule.business_status,
-        limit: schedule.record_limit,
-        skipTimes: schedule.skip_times,
-        withPhone: schedule.with_phone ?? true,
-        withoutPhone: schedule.without_phone ?? false,
-        enrichWithAreaCodes: schedule.enrich_with_area_codes ?? false,
-        addedFrom: settings.fromDate || now.toISODate(),
-        addedTo: settings.toDate || now.toISODate(),
-      })
-
-      if (!businessData?.length) {
-        await postSlackMessage(`⚠️ No data found for ${schedule.city} at ${currentHour}:${currentMinute}`, slackBotToken, slackChannelId)
-        continue
-      }
-
-      const rows: any[] = []
-      const emailKeys = [
-        ["email_1", "email_1_title", "email_1_first_name", "email_1_last_name"],
-        ["email_2", "email_2_title", "email_2_first_name", "email_2_last_name"],
-        ["email_3", "email_3_title", "email_3_first_name", "email_3_last_name"]
-      ]
-
-      for (const entry of businessData) {
-        let hasEmail = false
-        for (const [e, title, first, last] of emailKeys) {
-          if (entry[e]) {
-            hasEmail = true
-            const isValid = await verifyEmail(entry[e], settings.millionApiKey)
-            await new Promise((r) => setTimeout(r, 300))
-
-            const row: any = {}
-            for (const key of VERIFIED_HEADERS) {
-              row[key] = entry[key] ?? ""
-            }
-            row.email = entry[e]
-            row.email_title = entry[title] ?? ""
-            row.email_first_name = entry[first] ?? ""
-            row.email_last_name = entry[last] ?? ""
-            row.is_email_valid = isValid ? "TRUE" : "FALSE"
-            rows.push(row)
-          }
-        }
-
-        if (!hasEmail) {
-          const row: any = {}
-          for (const key of VERIFIED_HEADERS) {
-            row[key] = entry[key] ?? ""
-          }
-          row.email = ""
-          row.email_title = ""
-          row.email_first_name = ""
-          row.email_last_name = ""
-          row.is_email_valid = "FALSE"
-          rows.push(row)
-        }
-      }
-
-      const worksheet = XLSX.utils.json_to_sheet(rows, { header: VERIFIED_HEADERS })
-      XLSX.utils.sheet_add_aoa(worksheet, [VERIFIED_HEADERS], { origin: "A1" })
-
-      const workbook = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Results")
-      const xlsxBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" })
-
-      const fileName = `scrape_${Date.now()}.xlsx`
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from("scrapes")
-        .upload(fileName, xlsxBuffer, {
-          contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          upsert: true,
-        })
-
-      if (uploadError) {
-        console.error("❌ Upload error:", uploadError)
-        await postSlackMessage(`❌ Upload to storage failed for ${schedule.city}`, slackBotToken, slackChannelId)
-        continue
-      }
-
-      const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${fileName}`
-
-      await postSlackMessage(
-        `✅ Scrape complete for *${schedule.city}* (${schedule.business_type}) at ${currentHour}:${currentMinute}.\n📎 [Download XLSX](${publicUrl}) – ${rows.length} rows.`,
-        slackBotToken,
-        slackChannelId
-      )
-
-      await supabase
-        .from("recurring_scrapes")
-        .update({ skip_times: (schedule.skip_times || 0) + 1 })
-        .eq("id", schedule.id)
-
-    } catch (err) {
-      console.error(`❌ Error in schedule ID ${schedule.id}`, err)
-      await postSlackMessage(`❌ Scrape failed for schedule ID ${schedule.id}.`, slackBotToken, slackChannelId)
-    }
+  if (!jobs || jobs.length === 0) {
+    return NextResponse.json({ message: "No pending jobs." })
   }
 
-  return NextResponse.json({ message: "✅ Done processing schedules" })
+  const job = jobs[0]
+  await supabase.from("scrape_queue").update({ status: "running" }).eq("id", job.id)
+
+  try {
+    const { data: settingsData } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "scraperSettings")
+      .limit(1)
+
+    const settings = settingsData?.[0]?.value
+    const apiKey = settings.targetronApiKey
+    const mvKey = settings.millionApiKey
+    const slackToken = settings.slackBotToken
+    const slackChannel = settings.slackChannelId
+
+    const businessData = await fetchBusinessData({
+      apiKey,
+      country: job.country,
+      city: job.city,
+      state: job.state,
+      postalCode: job.postal_code,
+      businessType: job.business_type,
+      limit: job.record_limit,
+      skipTimes: job.skip_times,
+    })
+
+    const emailsToCheck = businessData
+      .map((item: any, idx: number) => {
+        const email = item.email || item.email_1 || item.email_2 || item.email_3
+        return email ? { id: String(idx), email } : null
+      })
+      .filter(Boolean) as { id: string; email: string }[]
+
+    const validationResults = await verifyEmailsTimedLoop(emailsToCheck, mvKey)
+
+    const verifiedData = businessData.map((item: any, idx: number) => {
+      const id = String(idx)
+      return {
+        ...item,
+        email: emailsToCheck.find((e) => e.id === id)?.email || "",
+        is_email_valid: validationResults[id] ?? false,
+      }
+    })
+
+    const sheet = XLSX.utils.json_to_sheet(verifiedData)
+    const book = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(book, sheet, "Results")
+    const buffer = XLSX.write(book, { bookType: "xlsx", type: "buffer" })
+
+    const fileName = `verified_${Date.now()}.xlsx`
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("scrapes")
+      .upload(fileName, buffer, {
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        upsert: true,
+      })
+
+    const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${encodeURIComponent(fileName)}`
+
+    if (slackToken && slackChannel) {
+      await axios.post(
+        "https://slack.com/api/chat.postMessage",
+        {
+          channel: slackChannel,
+          text: `✅ *Scrape completed* for *${job.city}* (${job.business_type})\n📎 [Download XLSX](${publicUrl})`,
+          mrkdwn: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${slackToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      )
+    }
+
+    await supabase
+      .from("scrape_queue")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", job.id)
+
+    return NextResponse.json({ message: `✅ Scrape job ${job.id} completed.` })
+  } catch (err: any) {
+    await supabase
+      .from("scrape_queue")
+      .update({ status: "failed", error: err.message })
+      .eq("id", job.id)
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
 }
-
-
-
-
-
-//CRONjob
