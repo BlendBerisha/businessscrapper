@@ -207,6 +207,40 @@ const handler: Handler = async () => {
       return { statusCode: 500, body: "Upload failed." }
     }
 
+
+    // ✅ Send Slack message with download link
+const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${encodeURIComponent(fileName)}`
+const { data: slackSettings, error: slackError } = await supabase
+  .from("settings")
+  .select("value")
+  .eq("key", "scraperSettings")
+  .single()
+
+if (slackError || !slackSettings?.value?.slackBotToken || !slackSettings?.value?.slackChannelId) {
+  console.warn("⚠️ Slack credentials not found in settings.")
+} else {
+  const { slackBotToken, slackChannelId } = slackSettings.value
+
+  const slackResponse = await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${slackBotToken}`,
+    },
+    body: JSON.stringify({
+      channel: slackChannelId,
+      text: `✅ Scraping completed!\nDownload your file: ${fileUrl}`,
+    }),
+  })
+
+  const slackJson = await slackResponse.json()
+  if (!slackJson.ok) {
+    console.error("❌ Slack message failed:", slackJson)
+  } else {
+    console.log("✅ Slack message sent.")
+  }
+}
+
     await supabase
       .from("scrape_queue")
       .update({ status: "completed", completed_at: new Date().toISOString() })
