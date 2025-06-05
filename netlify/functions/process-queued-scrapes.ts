@@ -2,6 +2,7 @@ import { Handler } from "@netlify/functions"
 import * as XLSX from "xlsx"
 import { createClient } from "@supabase/supabase-js"
 import { supabase } from "../../lib/supabase"
+import axios from "axios"
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -137,7 +138,10 @@ const handler: Handler = async () => {
 
     const settings = settingsData[0].value
     const apiKey = settings.targetronApiKey?.trim()
-    const mvKey = settings.millionVerifierApiKey?.trim()
+    const mvKey = settings.millionApiKey?.trim()
+    const slackToken = settings.slackBotToken?.trim()
+    const slackChannel = settings.slackChannelId?.trim()
+
     if (!apiKey) throw new Error("Missing Targetron API key in settings")
     if (!mvKey) throw new Error("Missing MillionVerifier API key in settings")
 
@@ -168,7 +172,6 @@ const handler: Handler = async () => {
       return { statusCode: 200, body: "No data found." }
     }
 
-    // ✅ VERIFY EMAILS using timed loop
     const emailsToCheck = businessData
       .map((item: any, idx: number) => {
         const rawEmail = item.email || item.email_1 || item.email_2 || item.email_3
@@ -188,7 +191,6 @@ const handler: Handler = async () => {
       }
     })
 
-    // ✅ EXPORT TO XLSX
     const sheet = XLSX.utils.json_to_sheet(verifiedData)
     const book = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(book, sheet, "Results")
@@ -207,39 +209,32 @@ const handler: Handler = async () => {
       return { statusCode: 500, body: "Upload failed." }
     }
 
+    const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${encodeURIComponent(fileName)}`
 
-    // ✅ Send Slack message with download link
-const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${encodeURIComponent(fileName)}`
-const { data: slackSettings, error: slackError } = await supabase
-  .from("settings")
-  .select("value")
-  .eq("key", "scraperSettings")
-  .single()
+    if (slackToken && slackChannel) {
+      try {
+        const slackRes = await axios.post("https://slack.com/api/chat.postMessage", {
+          channel: slackChannel,
+          text: `✅ *Scrape completed* for *${job.city}* (${job.business_type})\n📎 [Download XLSX](${publicUrl})`,
+          mrkdwn: true,
+        }, {
+          headers: {
+            Authorization: `Bearer ${slackToken}`,
+            "Content-Type": "application/json",
+          },
+        })
 
-if (slackError || !slackSettings?.value?.slackBotToken || !slackSettings?.value?.slackChannelId) {
-  console.warn("⚠️ Slack credentials not found in settings.")
-} else {
-  const { slackBotToken, slackChannelId } = slackSettings.value
-
-  const slackResponse = await fetch("https://slack.com/api/chat.postMessage", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${slackBotToken}`,
-    },
-    body: JSON.stringify({
-      channel: slackChannelId,
-      text: `✅ Scraping completed!\nDownload your file: ${fileUrl}`,
-    }),
-  })
-
-  const slackJson = await slackResponse.json()
-  if (!slackJson.ok) {
-    console.error("❌ Slack message failed:", slackJson)
-  } else {
-    console.log("✅ Slack message sent.")
-  }
-}
+        if (!slackRes.data.ok) {
+          console.error("❌ Slack error:", slackRes.data)
+        } else {
+          console.log("✅ Slack message sent.")
+        }
+      } catch (err) {
+        console.error("❌ Failed to send Slack message:", err)
+      }
+    } else {
+      console.warn("⚠️ Slack credentials missing in settings.")
+    }
 
     await supabase
       .from("scrape_queue")
