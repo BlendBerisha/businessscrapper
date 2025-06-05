@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from "next"
+import { NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { fetchBusinessData } from "@/actions/targetron"
 import { DateTime } from "luxon"
@@ -55,7 +55,7 @@ async function postSlackMessage(text: string, slackBotToken: string, slackChanne
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export async function GET() {
   const now = DateTime.now().setZone("Europe/Tirane")
   const currentDay = now.toFormat("cccc")
   const currentHour = now.hour
@@ -185,7 +185,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  return res.status(200).json({ message: "✅ Done processing schedules" })
+  return NextResponse.json({ message: "✅ Done processing schedules" })
 }
+
 
 
