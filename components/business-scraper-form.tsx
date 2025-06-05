@@ -930,7 +930,7 @@ async function handleEmailFileVerification(file: File) {
     handleChange("limit", val === "" ? null : parseInt(val))
   }}
   min={1}
-  max={useRecurringSettings ? 1000 : 100}
+max={useRecurringSettings ? 1000 : 5}
 />
 
 
