@@ -563,7 +563,7 @@ const handleAddRecurring = async () => {
   }
 
   const totalLimit = formData.limit
-  const batchSize = 100
+  const batchSize = 5
   const batchCount = Math.ceil(totalLimit / batchSize)
 
   for (const day of selectedDays) {
