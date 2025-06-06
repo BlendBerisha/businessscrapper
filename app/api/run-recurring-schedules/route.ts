@@ -96,6 +96,8 @@ async function verifyEmailsTimedLoop(
 }
 
 export async function GET() {
+    console.log("🚀 Function STARTED")
+
   const { data: jobs } = await supabase
     .from("scrape_queue")
     .select("*")
