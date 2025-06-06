@@ -1,4 +1,4 @@
-import { Handler } from "@netlify/functions"
+import { NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { fetchBusinessData } from "@/actions/targetron"
 import { DateTime } from "luxon"
@@ -20,6 +20,7 @@ const VERIFIED_HEADERS = [
   "corp_name", "corp_employees", "corp_revenue", "corp_founded_year", "corp_is_public", "added_at", "updated_at",
   "email", "email_title", "email_first_name", "email_last_name", "is_email_valid"
 ]
+
 interface MillionVerifierResponse {
   status: string
   result: string
@@ -30,38 +31,62 @@ const verifyEmail = async (email: string, apiKey: string): Promise<boolean> => {
     const { data } = await axios.get<MillionVerifierResponse>(
       `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}`
     )
-        return data.status === "ok" && data.result === "valid"
+    return data.status === "ok" && data.result === "valid"
   } catch (error) {
     console.error("❌ Email verification error for:", email, error)
     return false
   }
 }
 
+async function postSlackMessage(text: string, slackBotToken: string, slackChannelId: string) {
+  try {
+    console.log("📤 Sending Slack message:", { slackChannelId, text })
 
-const handler: Handler = async () => {
+    const response = await axios.post("https://slack.com/api/chat.postMessage", {
+      channel: slackChannelId,
+      text,
+      mrkdwn: true,
+    }, {
+      headers: {
+        Authorization: `Bearer ${slackBotToken}`,
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.data.ok) {
+      console.error("❌ Slack API error:", response.data)
+    } else {
+      console.log("✅ Slack message sent.")
+    }
+  } catch (err) {
+    console.error("❌ Failed to send Slack message:", err)
+  }
+}
+
+async function runRecurringScrapes() {
   const now = DateTime.now().setZone("Europe/Tirane")
   const currentDay = now.toFormat("cccc")
   const currentHour = now.hour
   const currentMinute = now.minute
 
   const { data: schedules } = await supabase.from("recurring_scrapes").select("*")
-const { data: settingsData } = await supabase
-  .from("settings")
-  .select("value")
-  .eq("key", "scraperSettings")
-  .limit(1)
+  const { data: settingsData } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "scraperSettings")
+    .limit(1)
 
-const settings = typeof settingsData?.[0]?.value === "string"
-  ? JSON.parse(settingsData[0].value)
-  : settingsData?.[0]?.value || {}
+  const settings = typeof settingsData?.[0]?.value === "string"
+    ? JSON.parse(settingsData[0].value)
+    : settingsData?.[0]?.value || {}
 
-const slackBotToken = settings.slackBotToken
-const slackChannelId = settings.slackChannelId
+  const slackBotToken = settings.slackBotToken
+  const slackChannelId = settings.slackChannelId
 
-console.log("🧪 Slack settings:", { slackBotToken, slackChannelId })
-if (!slackBotToken || !slackChannelId) {
-  console.warn("⚠️ Slack bot token or channel ID missing.")
-}
+  console.log("🧪 Slack settings:", { slackBotToken, slackChannelId })
+  if (!slackBotToken || !slackChannelId) {
+    console.warn("⚠️ Slack bot token or channel ID missing.")
+  }
 
   const dueSchedules = schedules?.filter(
     (s) =>
@@ -69,6 +94,10 @@ if (!slackBotToken || !slackChannelId) {
       s.hour === currentHour &&
       s.minute === currentMinute
   ) || []
+
+  if (dueSchedules.length === 0 && slackBotToken && slackChannelId) {
+    await postSlackMessage(`📭 No recurring scrapes scheduled at ${currentHour}:${currentMinute}.`, slackBotToken, slackChannelId)
+  }
 
   for (const schedule of dueSchedules) {
     try {
@@ -176,32 +205,14 @@ if (!slackBotToken || !slackChannelId) {
     }
   }
 
-  return { statusCode: 200, body: "✅ Done processing schedules" }
+  return NextResponse.json({ message: "✅ Done processing schedules" })
 }
 
-async function postSlackMessage(text: string, slackBotToken: string, slackChannelId: string) {
-  try {
-    console.log("📤 Sending Slack message:", { slackChannelId, text })
-
-    const response = await axios.post("https://slack.com/api/chat.postMessage", {
-      channel: slackChannelId,
-      text,
-      mrkdwn: true,
-    }, {
-      headers: {
-        Authorization: `Bearer ${slackBotToken}`,
-        "Content-Type": "application/json",
-      },
-    })
-
-    if (!response.data.ok) {
-      console.error("❌ Slack API error:", response.data)
-    } else {
-      console.log("✅ Slack message sent.")
-    }
-  } catch (err) {
-    console.error("❌ Failed to send Slack message:", err)
-  }
+// 👇 Support both GET and POST
+export async function GET() {
+  return runRecurringScrapes()
 }
 
-export { handler }
+export async function POST() {
+  return runRecurringScrapes()
+}
