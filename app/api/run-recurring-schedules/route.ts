@@ -55,10 +55,7 @@ async function fetchBusinessData(params: any) {
   return json.data
 }
 
-async function verifyEmailsTimedLoop(
-  emails: { id: string; email: string }[],
-  apiKey: string
-): Promise<Record<string, boolean>> {
+async function verifyEmailsTimedLoop(emails: { id: string; email: string }[], apiKey: string): Promise<Record<string, boolean>> {
   let index = 0
   const resultMap: Record<string, boolean> = {}
 
@@ -96,7 +93,7 @@ async function verifyEmailsTimedLoop(
 }
 
 export async function GET() {
-    console.log("🚀 Function STARTED")
+  console.log("🚀 Function STARTED")
 
   const { data: jobs } = await supabase
     .from("scrape_queue")
@@ -124,8 +121,24 @@ export async function GET() {
     const mvKey = settings.millionApiKey
     const slackToken = settings.slackBotToken
     const slackChannel = settings.slackChannelId
-console.log("🪪 Slack Token prefix:", slackToken?.slice(0, 12))
-console.log("📺 Slack Channel ID:", slackChannel)
+
+    // 🟡 Notify: Starting
+    if (slackToken && slackChannel) {
+      await axios.post(
+        "https://slack.com/api/chat.postMessage",
+        {
+          channel: slackChannel,
+          text: `🟡 *Scrape started* for *${job.city}* (${job.business_type})`,
+          mrkdwn: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${slackToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      ).catch(e => console.error("❌ Failed to notify Slack (start):", e.message))
+    }
 
     const businessData = await fetchBusinessData({
       apiKey,
@@ -174,8 +187,7 @@ console.log("📺 Slack Channel ID:", slackChannel)
       })
 
     if (uploadError) {
-      await supabase.from("scrape_queue").update({ status: "failed", error: uploadError.message }).eq("id", job.id)
-      return NextResponse.json({ error: "Upload to Supabase Storage failed." }, { status: 500 })
+      throw new Error(`Upload failed: ${uploadError.message}`)
     }
 
     const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/scrapes/${encodeURIComponent(fileName)}`
@@ -197,10 +209,9 @@ console.log("📺 Slack Channel ID:", slackChannel)
         }
       )
 
-    if ((slackRes.data as any).ok !== true) {
-  console.error("❌ Slack error:", slackRes.data)
-}
-else {
+      if ((slackRes.data as any).ok !== true) {
+        console.error("❌ Slack error:", slackRes.data)
+      } else {
         console.log("✅ Slack message sent for:", job.city)
       }
     }
@@ -211,12 +222,41 @@ else {
       .eq("id", job.id)
 
     return NextResponse.json({ message: `✅ Scrape job ${job.id} completed.` })
+
   } catch (err: any) {
     console.error("❌ Job failed:", err.message)
+
+    const { data: settingsData } = await supabase
+      .from("settings")
+      .select("value")
+      .eq("key", "scraperSettings")
+      .limit(1)
+
+    const slackToken = settingsData?.[0]?.value?.slackBotToken
+    const slackChannel = settingsData?.[0]?.value?.slackChannelId
+
+    if (slackToken && slackChannel) {
+      await axios.post(
+        "https://slack.com/api/chat.postMessage",
+        {
+          channel: slackChannel,
+          text: `❌ *Scrape failed:* ${err.message}`,
+          mrkdwn: true,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${slackToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      ).catch(e => console.error("❌ Failed to notify Slack (error):", e.message))
+    }
+
     await supabase
       .from("scrape_queue")
       .update({ status: "failed", error: err.message })
       .eq("id", job.id)
+
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
