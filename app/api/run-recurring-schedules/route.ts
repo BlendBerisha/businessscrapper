@@ -95,9 +95,9 @@ async function runRecurringScrapes() {
       s.minute === currentMinute
   ) || []
 
-  if (dueSchedules.length === 0 && slackBotToken && slackChannelId) {
-    await postSlackMessage(`📭 No recurring scrapes scheduled at ${currentHour}:${currentMinute}.`, slackBotToken, slackChannelId)
-  }
+  // if (dueSchedules.length === 0 && slackBotToken && slackChannelId) {
+  //   await postSlackMessage(`📭 No recurring scrapes scheduled at ${currentHour}:${currentMinute}.`, slackBotToken, slackChannelId)
+  // }
 
   for (const schedule of dueSchedules) {
     try {
