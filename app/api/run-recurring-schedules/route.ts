@@ -150,6 +150,32 @@ export async function GET() {
     console.error("❌ Failed inserting scrape jobs from recurring:", insertError.message)
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
+  const { data: settingsData } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", "scraperSettings")
+    .maybeSingle()
+
+  const slackToken = settingsData?.value?.slackBotToken
+  const slackChannel = settingsData?.value?.slackChannelId
+
+  if (slackToken && slackChannel) {
+    await axios.post(
+      "https://slack.com/api/chat.postMessage",
+      {
+        channel: slackChannel,
+        text: `📅 *${due.length} recurring scrape(s)* scheduled and added to queue at ${currentHour}:${currentMinute}`,
+        mrkdwn: true,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${slackToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    ).catch((e) => console.error("❌ Slack notify error:", e.message))
+  }
+
 
   return NextResponse.json({ message: "✅ Recurring schedules added to queue", count: due.length })
 }
