@@ -45,15 +45,23 @@ const handler: Handler = async () => {
   const currentMinute = now.minute
 
   const { data: schedules } = await supabase.from("recurring_scrapes").select("*")
-  const { data: settingsData } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "scraperSettings")
-    .limit(1)
+const { data: settingsData } = await supabase
+  .from("settings")
+  .select("value")
+  .eq("key", "scraperSettings")
+  .limit(1)
 
-  const settings = settingsData?.[0]?.value
-  const slackBotToken = settings?.slackBotToken
-  const slackChannelId = settings?.slackChannelId
+const settings = typeof settingsData?.[0]?.value === "string"
+  ? JSON.parse(settingsData[0].value)
+  : settingsData?.[0]?.value || {}
+
+const slackBotToken = settings.slackBotToken
+const slackChannelId = settings.slackChannelId
+
+console.log("🧪 Slack settings:", { slackBotToken, slackChannelId })
+if (!slackBotToken || !slackChannelId) {
+  console.warn("⚠️ Slack bot token or channel ID missing.")
+}
 
   const dueSchedules = schedules?.filter(
     (s) =>
@@ -173,7 +181,9 @@ const handler: Handler = async () => {
 
 async function postSlackMessage(text: string, slackBotToken: string, slackChannelId: string) {
   try {
-    await axios.post("https://slack.com/api/chat.postMessage", {
+    console.log("📤 Sending Slack message:", { slackChannelId, text })
+
+    const response = await axios.post("https://slack.com/api/chat.postMessage", {
       channel: slackChannelId,
       text,
       mrkdwn: true,
@@ -183,6 +193,12 @@ async function postSlackMessage(text: string, slackBotToken: string, slackChanne
         "Content-Type": "application/json",
       },
     })
+
+    if (!response.data.ok) {
+      console.error("❌ Slack API error:", response.data)
+    } else {
+      console.log("✅ Slack message sent.")
+    }
   } catch (err) {
     console.error("❌ Failed to send Slack message:", err)
   }
