@@ -122,6 +122,8 @@ export async function GET() {
     const mvKey = settings.millionApiKey
     const slackToken = settings.slackBotToken
     const slackChannel = settings.slackChannelId
+console.log("🪪 Slack Token prefix:", slackToken?.slice(0, 12))
+console.log("📺 Slack Channel ID:", slackChannel)
 
     const businessData = await fetchBusinessData({
       apiKey,
