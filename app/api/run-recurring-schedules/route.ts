@@ -156,12 +156,8 @@ export async function GET() {
     .eq("key", "scraperSettings")
     .maybeSingle()
 
-const config = typeof settingsData?.value === "string"
-  ? JSON.parse(settingsData.value)
-  : settingsData?.value || {}
-
-const slackToken = config.slackBotToken
-const slackChannel = config.slackChannelId
+  const slackToken = settingsData?.value?.slackBotToken
+  const slackChannel = settingsData?.value?.slackChannelId
 
   if (slackToken && slackChannel) {
     await axios.post(
