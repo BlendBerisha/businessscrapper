@@ -95,7 +95,7 @@ async function verifyEmailsTimedLoop(emails: { id: string; email: string }[], ap
 
 export async function GET() {
   const now = DateTime.now().setZone("Europe/Tirane")
-  const currentDay = now.toFormat("cccc") // e.g. "Friday"
+  const currentDay = now.toFormat("cccc")
   const currentHour = now.hour
   const currentMinute = now.minute
 
@@ -121,7 +121,6 @@ export async function GET() {
 
   console.log(`🎯 Found ${due.length} due recurring schedules at ${currentHour}:${currentMinute}`)
 
-  // Here you'd typically insert them into `scrape_queue`
   const insertData = due.map((s) => ({
     created_at: new Date().toISOString(),
     status: "pending",
@@ -150,36 +149,48 @@ export async function GET() {
     console.error("❌ Failed inserting scrape jobs from recurring:", insertError.message)
     return NextResponse.json({ error: insertError.message }, { status: 500 })
   }
+
   const { data: settingsData } = await supabase
     .from("settings")
     .select("value")
     .eq("key", "scraperSettings")
     .maybeSingle()
 
-const config = typeof settingsData?.value === "string"
-  ? JSON.parse(settingsData.value)
-  : settingsData?.value || {}
+  const config = typeof settingsData?.value === "string"
+    ? JSON.parse(settingsData.value)
+    : settingsData?.value || {}
 
-const slackToken = config.slackBotToken
-const slackChannel = config.slackChannelId
+  const slackToken = config.slackBotToken
+  const slackChannel = config.slackChannelId
 
   if (slackToken && slackChannel) {
-    await axios.post(
-      "https://slack.com/api/chat.postMessage",
-      {
-        channel: slackChannel,
-        text: `📅 *${due.length} recurring scrape(s)* scheduled and added to queue at ${currentHour}:${currentMinute}`,
-        mrkdwn: true,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${slackToken}`,
-          "Content-Type": "application/json",
+    try {
+      const response = await axios.post(
+        "https://slack.com/api/chat.postMessage",
+        {
+          channel: slackChannel,
+          text: `📅 *${due.length} recurring scrape(s)* scheduled and added to queue at ${currentHour}:${currentMinute}`,
+          mrkdwn: true,
         },
-      }
-    ).catch((e) => console.error("❌ Slack notify error:", e.message))
-  }
+        {
+          headers: {
+            Authorization: `Bearer ${slackToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      )
 
+      if (!response.data.ok) {
+        console.error("❌ Slack API responded with error:", response.data)
+      } else {
+        console.log("✅ Slack message sent successfully.")
+      }
+    } catch (e: any) {
+      console.error("❌ Slack notify error:", e.response?.data || e.message)
+    }
+  } else {
+    console.warn("⚠️ Slack token or channel not set in scraperSettings.")
+  }
 
   return NextResponse.json({ message: "✅ Recurring schedules added to queue", count: due.length })
 }
