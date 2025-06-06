@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { fetchBusinessData } from "@/actions/targetron"
 import { DateTime } from "luxon"
@@ -213,6 +213,40 @@ export async function GET() {
   return runRecurringScrapes()
 }
 
-export async function POST() {
-  return runRecurringScrapes()
+export async function POST(req: NextRequest) {
+  try {
+    const { emails, apiKey } = await req.json()
+
+    if (!Array.isArray(emails) || !apiKey) {
+      return NextResponse.json({ error: "Missing email list or API key." }, { status: 400 })
+    }
+
+    const results: { email: string; is_email_valid: boolean }[] = []
+
+    for (const email of emails) {
+      try {
+        const res = await fetch(
+          `https://api.millionverifier.com/api/v3/?api=${encodeURIComponent(apiKey)}&email=${encodeURIComponent(email)}`
+        )
+
+        const data = await res.json()
+        const isValid =
+          ["ok", "valid", "catch_all"].includes(data.result?.toLowerCase?.()) &&
+          data.quality?.toLowerCase?.() !== "risky"
+
+        results.push({ email, is_email_valid: isValid })
+      } catch (error) {
+        console.error("❌ Email verification error:", email, error)
+        results.push({ email, is_email_valid: false })
+      }
+
+      // Respect API rate limits
+      await new Promise((r) => setTimeout(r, 300))
+    }
+
+    return NextResponse.json(results)
+  } catch (error) {
+    console.error("❌ Error in /api/verify-email:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
 }
